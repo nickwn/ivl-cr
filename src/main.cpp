@@ -87,7 +87,7 @@ int main()
 	const GLubyte* renderer = glGetString(GL_RENDERER);
 	std::cout << renderer << "\n";
 
-	std::string folder = "Larry_Smarr_2016/";
+	std::string folder = "scans/Larry_Smarr_2016/";
 	glActiveTexture(GL_TEXTURE1);
 	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(folder);
 
