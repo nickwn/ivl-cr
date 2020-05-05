@@ -128,7 +128,7 @@ int main()
 	OpacityPF opacityPF;
 	opacityPF.AddStop(0.f, 0.f);
 	opacityPF.AddStop(.55f, 0.f);
-	opacityPF.AddStop(1.f, .7f);
+	opacityPF.AddStop(1.f, .5f);
 
 	glActiveTexture(GL_TEXTURE3);
 	opacityPF.EvaluateTexture(100);
@@ -142,7 +142,7 @@ int main()
 	glActiveTexture(GL_TEXTURE4);
 	Cubemap cubemap(cubemapFiles);
 
-	const uint32_t numSamples = 8;
+	const uint32_t numSamples = 2;
 	RaytracePass raytracePass(size, numSamples, dicom);
 	DrawQuad drawQuad = DrawQuad(size, numSamples);
 
