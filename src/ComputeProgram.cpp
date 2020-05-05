@@ -80,6 +80,13 @@ void ComputeProgram::UpdateUniform(std::string name, const GLuint value)
 	glUniform1ui(mUniformMap[name], value);
 }
 
+
+template<>
+void ComputeProgram::UpdateUniform(std::string name, const GLint value)
+{
+	glUniform1i(mUniformMap[name], value);
+}
+
 template<>
 void ComputeProgram::UpdateUniform(std::string name, const float value)
 {

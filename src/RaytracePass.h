@@ -20,6 +20,8 @@ public:
 
 	void SetView(const glm::mat4& view) { mView = view; }
 
+	void SetItrs(int itrs) { mItrs = itrs; }
+
 private:
 	ComputeProgram mComputeProgram;
 	glm::ivec2 mSize;
@@ -33,5 +35,7 @@ private:
 	glm::vec3 mScaleFactor;
 	glm::vec3 mLowerBound;
 	glm::mat4 mView;
+
+	int mItrs;
 };
 

@@ -23,3 +23,15 @@ GLuint PiecewiseFunction<float, float, ConstInterp<float, float>>::GenTexture(co
 
 	return tex;
 }
+
+GLuint PiecewiseFunction<float, float, LinearInterp<float, float>>::GenTexture(const std::vector<float>& evals) const
+{
+	GLuint tex;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_1D, tex);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); // would be better if sampled lower, but high sample cound should solve
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexImage1D(GL_TEXTURE_1D, 0, GL_R32F, evals.size(), 0, GL_RED, GL_FLOAT, evals.data());
+
+	return tex;
+}

@@ -9,31 +9,58 @@ uniform uint numSamples;
 uniform vec3 scaleFactor;
 uniform vec3 lowerBound;
 uniform mat4 view;
+uniform int itrs;
 
 float pi = 3.141592653589;
 float e = 2.718281828459045;
 
-// Interleaved Gradient Noise by Jorge Jimenez.
-// http://www.iryoku.com/next-generation-post-processing-in-call-of-duty-advanced-warfare
-float interleavedGradientNoise(vec2 xy)
-{
-    return fract(52.9829189f * fract(xy.x * 0.06711056f + xy.y * 0.00583715f));
+uint state[4];
+
+int hash(int x) {
+    x += (x << 10u);
+    x ^= (x >> 6u);
+    x += (x << 3u);
+    x ^= (x >> 11u);
+    x += (x << 15u);
+    return x;
 }
 
-float noise(vec2 xy)
+uint rotl(const uint x, int k) {
+    return (x << k) | (x >> (32 - k));
+}
+
+// xoshiro128+
+// from http://prng.di.unimi.it/xoshiro128plus.c
+uint nextUInt() {
+    const uint result = state[0] + state[3];
+
+    const uint t = state[1] << 9;
+
+    state[2] ^= state[0];
+    state[3] ^= state[1];
+    state[1] ^= state[2];
+    state[0] ^= state[3];
+
+    state[2] ^= t;
+
+    state[3] = rotl(state[3], 11);
+
+    return result;
+}
+
+// from https://github.com/wjakob/pcg32/blob/master/pcg32.h
+float noise()
 {
-    return interleavedGradientNoise(xy * 4000.0);
+    /* Trick from MTGP: generate an uniformly distributed
+           single precision number in [1,2) and subtract 1. */
+    uint u = (nextUInt() >> 9) | 0x3f800000u;
+    return uintBitsToFloat(u) - 1.0f;
 }
 
 // shitty 2d noise func
-vec2 noise2(vec2 xy)
+vec2 noise2()
 {
-    const float subdivs = 8196.0;
-    const float subdivSz = 1.0 / subdivs;
-    const float subdivSz2 = subdivSz * subdivSz;
-
-    const float randNorm = interleavedGradientNoise(xy * 2000.0);
-    return vec2(mod(randNorm, subdivSz) * subdivs, (randNorm * subdivs) * subdivSz); // ??
+    return vec2(noise(), noise());
 }
 
 // from Trevor Headstrom's code
@@ -50,7 +77,7 @@ vec2 rayBox(vec3 ro, vec3 rd, vec3 mn, vec3 mx) {
 // why does pixar have an 8 page paper on calculating an ONB
 void ONB(const vec3 n, out vec3 b1, out vec3 b2)
 {
-    float sign = sign(n.z);
+    const float sign = sign(n.z);
     const float a = -1.0f / (sign + n.z);
     const float b = n.x * n.y * a;
     b1 = vec3(1.0f + sign * n.x * n.x * a, sign * b, -sign * n.x);
@@ -61,7 +88,6 @@ void ONB(const vec3 n, out vec3 b1, out vec3 b2)
 vec3 lambertian(vec3 color, vec3 wo, vec3 n)
 {
     return color * max(0.0, dot(wo, n)) / pi;
-    //return vec3(1.0) * max(0.0, dot(wo, n));
 }
 
 vec3 sampleLambertian(vec3 n, vec2 uv)
@@ -88,6 +114,7 @@ vec3 schlickPhase(vec3 color, vec3 wo, vec3 wi, float k)
     //return vec3(2.0) * (1 - k * k) / (4 * pi * a * a);
 }
 
+// doesn't work
 vec3 sampleSchlickPhase(vec3 wi, vec2 uv)
 {
     uv = uv * 2 - 1;
@@ -120,6 +147,7 @@ const float farT = 5.0; // hehe
 
 const float stepSize = 0.01;
 const float maxAccum = 2.0;
+const float densityScale = 0.01;
 
 void main()
 {
@@ -127,7 +155,17 @@ void main()
     ivec2 index = ivec2(gl_GlobalInvocationID.xy);
     ivec2 screenIndex = ivec2(index.x / numSamples, index.y);
 
-    vec2 clip = (vec2(screenIndex.xy + noise2(index.xy)) - halfRes) / halfRes.y;
+    // TODO: seed better
+    int seed1 = hash(index.x);
+    int seed2 = hash(index.y);
+    int seed3 = hash(itrs);
+    state[0] = seed1 ^ seed3;
+    state[1] = seed2 ^ seed3;
+    state[2] = index.x ^ seed2;
+    state[3] = index.y ^ seed1;
+    //noise(); noise(); noise(); noise();
+
+    vec2 clip = (vec2(screenIndex.xy + noise2()) - halfRes) / halfRes.y;
     vec3 rd = (view * vec4(normalize(vec3(clip, z)), 0.0)).xyz;
     vec3 ro = (view * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 
@@ -135,6 +173,7 @@ void main()
     isect.x = max(0, isect.x);
     isect.y = min(isect.y, farT);
 
+    // early out if no bb hit
     if (isect.x >= isect.y)
     {
         vec3 missCol = texture(cubemap, rd).rgb;
@@ -142,41 +181,55 @@ void main()
         return;
     }
 
+    // init woodcock tracking from camera
     ro += rd * isect.x;
     isect.y -= isect.x;
 
-    float samples = isect.y / stepSize;
-    vec3 dp = rd * stepSize;
+    float s = -log(noise()) * densityScale;
+    float sum = 0.0f;
+    uint hit = 1;
+    isect.x = noise() * stepSize;
 
-    vec3 p = ro;
-    float density = 0.0, opacity = 0.0, accum = 0.0;
-    vec3 rel = vec3(0.0);
-    for (float t = stepSize; t <= isect.y; t += stepSize)
+    vec3 ps = vec3(0.0), rel = vec3(0.0);
+    float density = 0.0;
+    while (sum < s)
     {
-        p += dp;
-        rel = (p - lowerBound) * scaleFactor;
-        density = texture(rawVolume, rel).r;
-        opacity = texture(opacityLUT, density).r;
+        ps = ro + isect.x * rd;
+        rel = (ps - lowerBound) * scaleFactor;
 
-        accum += density * opacity; // TODO: actually make opacity TF an opacity TF instead of just visible/not
-        if (accum >= noise(index.xy) * maxAccum) break;
-        opacity = 0.0; // TODO: fix shitty hack
+        if (isect.x >= isect.y)
+        {
+            hit = 0;
+            break;
+        }
+
+        density = texture(rawVolume, rel).r;
+        float opacity = texture(opacityLUT, density).r;
+
+        float sigmaT = density * opacity;
+
+        sum += sigmaT * stepSize;
+        isect.x += stepSize;
     }
 
-    if (opacity == 0.0)
+    if (hit==0)
     {
         vec3 missCol = texture(cubemap, rd).rgb;
-        imageStore(imgOutput, index, vec4(missCol, 1.0));
+        //imageStore(imgOutput, index, vec4(missCol, 1.0));
+        float invItr = 1.0 / float(itrs);
+        vec4 newCol = imageLoad(imgOutput, index) * (1.0 - invItr) + vec4(missCol, 1.0) * invItr;
+        imageStore(imgOutput, index, newCol);
         return;
     }
 
-    vec3 col = texture(transferLUT, density).rgb * opacity;
+    vec3 col = texture(transferLUT, density).rgb;
 
+    // shade with brdf or phase function
     vec3 grad = calcGradient(rel);
-    vec2 uv = noise2(index.xy);
+    vec2 uv = noise2();
     vec3 wi = -rd, wo = vec3(0.0), pct = vec3(0.0);
-    float pbrdf = pBRDF(density * opacity, length(grad), 1.0);
-    if (noise(index.xy) < 1.0)
+    float pbrdf = pBRDF(density, length(grad), 1.0);
+    if (noise() < 1.0)
     {
         vec3 n = normalize(grad);
         wo = sampleLambertian(n, uv);
@@ -188,32 +241,44 @@ void main()
         pct = schlickPhase(col, wo, wi, 0.0);// * vec3(0.0, 1.0, 0.0);
     }
 
-    isect = rayBox(p, wo, lowerBound, -1.0 * lowerBound);
+    isect = rayBox(ps, wo, lowerBound, -1.0 * lowerBound);
     isect.y = min(isect.y, farT);
     //isect.y = max(0.0, max(isect.x, isect.y));
-    p = p + wo * isect.y;
-    dp = -wo * stepSize;
-    accum = 0.0;
-    uint visible = 1;
-    for (float t = stepSize; t <= isect.y; t += stepSize)
-    {
-        p += dp;
-        rel = (p - lowerBound) * scaleFactor;
-        density = texture(rawVolume, rel).r;
-        opacity = texture(opacityLUT, 1 - density).r;
 
-        accum += density * opacity;
-        if (accum >= noise(index.xy) * maxAccum * 4)
+    // init woodcock tracking from light source
+    s = -log(noise()) * densityScale;
+    sum = 0.0f;
+    hit = 1;
+    isect.x = noise() * stepSize;
+
+    ro = ps + isect.y * wo;
+    rd = -wo;
+    while (sum < s)
+    {
+        vec3 ps = ro + isect.x * rd;
+        vec3 rel = (ps - lowerBound) * scaleFactor;
+
+        if (isect.x >= isect.y)
         {
-            visible = 0;
+            hit = 0;
             break;
         }
+
+        density = texture(rawVolume, rel).r;
+        float opacity = texture(opacityLUT, density).r;
+
+        float sigmaT = density * opacity;
+
+        sum += sigmaT * stepSize;
+        isect.x += stepSize;
     }
 
     vec3 incomingRadiance = texture(cubemap, wo).rgb * 10.0;
-    col = pct * incomingRadiance * visible; //* incomingRadiance * visible;
+    col = pct * incomingRadiance * (1-hit); //* incomingRadiance * visible;
     //col = vec3(visible);
 
     // output to a specific pixel in the image
-    imageStore(imgOutput, index, vec4(col, 1.0));
+    float invItr = 1.0 / float(itrs);
+    vec4 newCol = imageLoad(imgOutput, index) * (1.0 - invItr) + vec4(col, 1.0) * invItr;
+    imageStore(imgOutput, index, newCol);
 }

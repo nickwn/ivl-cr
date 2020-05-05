@@ -150,11 +150,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="Dicom.h" />
     <ClInclude Include="DrawQuad.h" />
     <ClInclude Include="PiecewiseFunction.h" />
     <ClInclude Include="src\ComputeProgram.h" />
     <ClInclude Include="src\Cubemap.h" />
+    <ClInclude Include="src\Dicom.h" />
     <ClInclude Include="src\RaytracePass.h" />
     <ClInclude Include="src\stb_image.h" />
     <ClInclude Include="Window.h" />

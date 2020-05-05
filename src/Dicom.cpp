@@ -1,3 +1,5 @@
+#define NOMINMAX
+
 #include "Dicom.h"
 
 #include <filesystem>
@@ -21,10 +23,12 @@ Dicom::Dicom(std::string folder)
 	struct DcmSlice
 	{
 		std::unique_ptr<DicomImage> image;
+		glm::dvec3 spacing;
 		double location;
 	};
 
 	std::deque<DcmSlice> slices;
+	glm::dvec3 maxSpacing = glm::dvec3(0.0);
 	try
 	{
 		for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(folder))
@@ -32,13 +36,21 @@ Dicom::Dicom(std::string folder)
 			DcmFileFormat fileFormat;
 			fileFormat.loadFile(entry.path().string().c_str());
 
+			DcmDataset* dataset = fileFormat.getDataset();
+
+			glm::dvec3 spacing;
+			dataset->findAndGetFloat64(DCM_PixelSpacing, spacing.x, 0);
+			dataset->findAndGetFloat64(DCM_PixelSpacing, spacing.y, 1);
+			dataset->findAndGetFloat64(DCM_SliceThickness, spacing.z, 0);
+
 			double location;
 			fileFormat.getDataset()->findAndGetFloat64(DCM_SliceLocation, location, 0);
 
 			std::unique_ptr<DicomImage> image = std::make_unique<DicomImage>(entry.path().string().c_str());
 			if (image->getStatus() == EI_Status::EIS_Normal)
 			{
-				slices.push_back({ std::move(image), location });
+				slices.push_back({ std::move(image), spacing, location });
+				maxSpacing = glm::max(maxSpacing, spacing);
 			}
 			else
 			{
@@ -59,6 +71,15 @@ Dicom::Dicom(std::string folder)
 	const uint32_t w = slices[0].image->getWidth();
 	const uint32_t h = slices[0].image->getHeight();
 	const uint32_t d = uint32_t(slices.size());
+
+	glm::vec2 b = glm::vec2(slices[0].location);
+	for (const auto& i : slices) 
+	{
+		b.x = (float)fmin(i.location - i.spacing.z * .5, b.x);
+		b.y = (float)fmax(i.location + i.spacing.z * .5, b.y);
+	}
+
+	mPhysicalSize = glm::vec3(.001f * glm::vec3(glm::vec2(maxSpacing) * glm::vec2(w, h), b.y - b.x));
 
 	std::vector<uint16_t> data(w * h * d);
 	for (size_t i = 0; i < slices.size(); i++)

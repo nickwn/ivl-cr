@@ -21,9 +21,10 @@ public:
 		: mLastCachedView(initial)
 		, mDragStartPos()
 		, mCurrDelta()
+		, mViewDirtied(false)
 	{}
 
-	virtual void HandleMotion(std::shared_ptr<Window> window, const glm::vec2& pos) override
+	void HandleMotion(std::shared_ptr<Window> window, const glm::vec2& pos) override
 	{
 		if (mDragStartPos)
 		{
@@ -31,7 +32,7 @@ public:
 		}
 	}
 
-	virtual void HandleButton(std::shared_ptr<Window> window, int button, int action, int mods) override
+	void HandleButton(std::shared_ptr<Window> window, int button, int action, int mods) override
 	{
 		if (button == GLFW_MOUSE_BUTTON_LEFT)
 		{
@@ -39,11 +40,13 @@ public:
 			{
 				mDragStartPos = window->GetMousePos();
 				mCurrDelta = glm::mat4(1.f);
+				mViewDirtied = true;
 			}
 			else if (action == GLFW_RELEASE)
 			{
 				mDragStartPos.reset();
 				mCurrDelta.reset();
+				mViewDirtied = false;
 				mLastCachedView = *mCurrDelta * mLastCachedView;
 			}
 		}
@@ -56,6 +59,13 @@ public:
 			return *mCurrDelta * mLastCachedView;
 		}
 		return mLastCachedView;
+	}
+
+	bool GetViewDirtied() 
+	{ 
+		bool temp = mViewDirtied;
+		//mViewDirtied = false;
+		return temp; 
 	}
 
 private:
@@ -72,6 +82,7 @@ private:
 	std::optional<glm::vec2> mDragStartPos;
 	std::optional<glm::mat4> mCurrDelta;
 	glm::mat4 mLastCachedView;
+	bool mViewDirtied;
 };
 
 int main()
@@ -87,15 +98,22 @@ int main()
 	const GLubyte* renderer = glGetString(GL_RENDERER);
 	std::cout << renderer << "\n";
 
-	std::string folder = "scans/Larry_Smarr_2016/";
+	//std::string folder = "scans/Larry_Smarr_2016/";
+	//std::string folder = "scans/HNSCC/HNSCC-01-0617/12-16-2012-017-27939/2.000000-ORALNASOPHARYNX-41991/";
+	//std::string folder = "scans/HNSCC/HNSCC-01-0620/12-16-2012-002-29827/2.000000-ORALNASOPHARYNX-84704/";
+	std::string folder = "scans/HNSCC/HNSCC-01-0618/12-16-2012-002-07039/2.000000-ORALNASOPHARYNX-35559/";
 	glActiveTexture(GL_TEXTURE1);
 	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(folder);
 
 	using ColorPF = PLF<float, glm::vec4>;
 	ColorPF colorPF;
-	colorPF.AddStop(0.f, glm::vec4(0.f, 0.f, 0.f, 1.f));
+	//colorPF.AddStop(0.f, glm::vec4(0.f, 0.f, 0.f, 1.f));
+	//colorPF.AddStop(1.f, glm::vec4(1.f, 1.f, 1.f, 1.f));
+	colorPF.AddStop(0.f, glm::vec4(.7f, 0.f, 0.f, 1.f));
+	colorPF.AddStop(.55f, glm::vec4(.7f, 0.f, 0.f, 1.f));
 	colorPF.AddStop(1.f, glm::vec4(1.f, 1.f, 1.f, 1.f));
 
+	// warren's transfer func
 	//colorPF.AddStop(0.f, glm::vec4(.62f, .62f, .64f, 1.f));
 	//colorPF.AddStop(0.2361297f, glm::vec4(.17f, 0.f, 0.f, 1.f));
 	//colorPF.AddStop(0.288528f, glm::vec4(.17f, 0.02f, 0.02f, 1.f));
@@ -106,11 +124,11 @@ int main()
 	glActiveTexture(GL_TEXTURE2);
 	colorPF.EvaluateTexture(100);
 
-	using OpacityPF = PCF<float, float>;
+	using OpacityPF = PLF<float, float>;
 	OpacityPF opacityPF;
 	opacityPF.AddStop(0.f, 0.f);
-	opacityPF.AddStop(.1f, 1.f);
-	opacityPF.AddStop(1.f, 1.f);
+	opacityPF.AddStop(.55f, 0.f);
+	opacityPF.AddStop(1.f, .7f);
 
 	glActiveTexture(GL_TEXTURE3);
 	opacityPF.EvaluateTexture(100);
@@ -130,6 +148,11 @@ int main()
 
 	while (!win->ShouldClose())
 	{
+		if (viewController->GetViewDirtied())
+		{
+			raytracePass.SetItrs(1);
+		}
+
 		const glm::mat4 view = viewController->GetView();
 		raytracePass.SetView(view);
 		raytracePass.Execute();

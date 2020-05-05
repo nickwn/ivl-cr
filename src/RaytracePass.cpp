@@ -3,11 +3,12 @@
 #include <algorithm>
 
 RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::shared_ptr<Dicom> dicom)
-    : mComputeProgram("raymarch.glsl", { "imgOutput", "rawVolume", "transferLUT", "opacityLUT", "cubemap",
-		"numSamples", "scaleFactor", "lowerBound", "view" })
+	: mComputeProgram("raymarch.glsl", { "imgOutput", "rawVolume", "transferLUT", "opacityLUT", "cubemap",
+		"numSamples", "scaleFactor", "lowerBound", "view", "itrs" })
 	, mSize(size)
 	, mNumSamples(samples)
 	, mDicom(dicom)
+	, mItrs(1)
 {
 	mPosTexture = 0;
 	mDirTexture = 0;
@@ -28,17 +29,28 @@ RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::
 void RaytracePass::Execute()
 {
 	const glm::vec3 scanSize = glm::vec3(mDicom.lock()->GetScanSize());
+	const glm::vec3 physicalSize = glm::vec3(mDicom.lock()->GetPhysicalSize());
+	const float invMaxComp = 1.f / std::max(std::max(physicalSize.x, physicalSize.y), physicalSize.z);
+	mLowerBound = -physicalSize * invMaxComp;
+	const glm::vec3 upperBound = physicalSize * invMaxComp;
+	const glm::vec3 boundDim = (upperBound - mLowerBound);
+	mScaleFactor = 1.f / boundDim;
+
+	/*
 	const float invMaxComp = 1.f / std::max(std::max(scanSize.x, scanSize.y), scanSize.z);
 	mLowerBound = -scanSize * invMaxComp;
 	const glm::vec3 upperBound = scanSize * invMaxComp;
 	const glm::vec3 boundDim = (upperBound - mLowerBound);
-	mScaleFactor = 1.f / boundDim;
+	mScaleFactor = 1.f / boundDim;*/
 
-	glBindImageTexture(0, mColorTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	glBindImageTexture(0, mColorTexture, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 	mComputeProgram.Use();
 	mComputeProgram.UpdateUniform("numSamples", GLuint(mNumSamples));
 	mComputeProgram.UpdateUniform("scaleFactor", mScaleFactor);
 	mComputeProgram.UpdateUniform("lowerBound", mLowerBound);
 	mComputeProgram.UpdateUniform("view", mView);
+	mComputeProgram.UpdateUniform("itrs", mItrs);
 	mComputeProgram.Execute((mSize.x * mNumSamples)/16, mSize.y/16, 1);
+
+	mItrs++;
 }
