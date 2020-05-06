@@ -3,7 +3,7 @@
 #include <algorithm>
 
 RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::shared_ptr<Dicom> dicom)
-	: mComputeProgram("raymarch.glsl", { "imgOutput", "rawVolume", "transferLUT", "opacityLUT", "cubemap",
+	: mComputeProgram("shaders/raymarch.glsl", { "imgOutput", "rawVolume", "transferLUT", "opacityLUT", "cubemap",
 		"numSamples", "scaleFactor", "lowerBound", "view", "itrs" })
 	, mSize(size)
 	, mNumSamples(samples)

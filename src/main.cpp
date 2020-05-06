@@ -52,7 +52,7 @@ public:
 		}
 	}
 
-	glm::mat4 GetView()
+	glm::mat4 GetView() const
 	{
 		if (mDragStartPos)
 		{
@@ -61,7 +61,7 @@ public:
 		return mLastCachedView;
 	}
 
-	bool GetViewDirtied() 
+	bool GetIsViewDirtied() const
 	{ 
 		bool temp = mViewDirtied;
 		//mViewDirtied = false;
@@ -148,7 +148,7 @@ int main()
 
 	while (!win->ShouldClose())
 	{
-		if (viewController->GetViewDirtied())
+		if (viewController->GetIsViewDirtied())
 		{
 			raytracePass.SetItrs(1);
 		}
