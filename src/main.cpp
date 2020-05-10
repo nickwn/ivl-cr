@@ -12,7 +12,7 @@
 #include "RaytracePass.h"
 #include "DrawQuad.h"
 #include "PiecewiseFunction.h"
-#include "Cubemap.h"
+#include "GLObjects.h"
 
 class ViewController : public MouseListener
 {
@@ -98,10 +98,10 @@ int main()
 	const GLubyte* renderer = glGetString(GL_RENDERER);
 	std::cout << renderer << "\n";
 
-	//std::string folder = "scans/Larry_Smarr_2016/";
+	std::string folder = "scans/Larry_Smarr_2016/";
 	//std::string folder = "scans/HNSCC/HNSCC-01-0617/12-16-2012-017-27939/2.000000-ORALNASOPHARYNX-41991/";
 	//std::string folder = "scans/HNSCC/HNSCC-01-0620/12-16-2012-002-29827/2.000000-ORALNASOPHARYNX-84704/";
-	std::string folder = "scans/HNSCC/HNSCC-01-0618/12-16-2012-002-07039/2.000000-ORALNASOPHARYNX-35559/";
+	//std::string folder = "scans/HNSCC/HNSCC-01-0618/12-16-2012-002-07039/2.000000-ORALNASOPHARYNX-35559/";
 	glActiveTexture(GL_TEXTURE1);
 	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(folder);
 
@@ -127,7 +127,8 @@ int main()
 	using OpacityPF = PLF<float, float>;
 	OpacityPF opacityPF;
 	opacityPF.AddStop(0.f, 0.f);
-	opacityPF.AddStop(.55f, 0.f);
+	//opacityPF.AddStop(.5f, 0.f);
+	opacityPF.AddStop(.2f, 0.f);
 	opacityPF.AddStop(1.f, .5f);
 
 	glActiveTexture(GL_TEXTURE3);

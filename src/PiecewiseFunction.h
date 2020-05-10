@@ -7,6 +7,8 @@
 #include <gl/glew.h>
 #include <glm/glm.hpp>
 
+#include "GLObjects.h"
+
 template<typename K, typename V>
 struct LinearInterp
 {
@@ -26,7 +28,7 @@ struct ConstInterp
 	}
 };
 
-template<typename K, typename V, typename Interp = LinearInterp<K, V>>
+template<typename K, typename V, typename Interp>
 class PiecewiseFunction
 {
 public:
@@ -47,7 +49,7 @@ public:
 	void EvaluateTexture(const uint32_t size)
 	{
 		std::vector<V> evals = Evaluate(size);
-		mTexture = GenTexture(evals);
+		GenTexture(evals);
 	}
 
 	GLuint GetTexture() const { return mTexture; }
@@ -72,11 +74,11 @@ private:
 		return evals;
 	}
 
-	GLuint GenTexture(const std::vector<V>& evals) const;
+	void GenTexture(const std::vector<V>& evals) const;
 
 	Interp mInterp;
 	
-	GLuint mTexture;
+	UniqueTexture mUniqueTexture;
 
 	std::vector<K> mKeys;
 	std::vector<V> mValues;

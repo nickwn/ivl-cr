@@ -49,7 +49,7 @@ DrawQuad::DrawQuad(glm::ivec2 size, uint32_t samples)
 
 	attachShader(mProgram, GL_FRAGMENT_SHADER, R"(
 	  #version 450 core
-	  readonly restrict uniform layout(rgba32f) image2D image;
+	  readonly restrict uniform layout(rgba16f) image2D image;
 	  uniform uint samples;
 	  layout(location=0) out vec4 color;
 	  void main(void) {
@@ -81,11 +81,11 @@ DrawQuad::~DrawQuad()
 	glDeleteProgram(mProgram);
 }
 
-void DrawQuad::Execute(GLuint texture)
+void DrawQuad::Execute(const UniqueTexture& texture)
 {
 	glUseProgram(mProgram);
 	glBindImageTexture(
-		0, texture, 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+		0, texture.Get(), 0, false, 0, GL_READ_WRITE, GL_RGBA16F);
 	glUniform1i(0, 0);
 	glUniform1ui(1, mNumSamples);
 	glBindVertexArray(mArray);

@@ -5,7 +5,7 @@
 #include <gl/glew.h>
 #include <glm/glm.hpp>
 
-#include "ComputeProgram.h"
+#include "GLObjects.h"
 #include "Dicom.h"
 #include "PiecewiseFunction.h"
 
@@ -16,21 +16,24 @@ public:
 
 	void Execute();
 
-	GLuint GetColorTexture() { return mColorTexture; }
+	const UniqueTexture& GetColorTexture() { return mColorTexture; }
 
 	void SetView(const glm::mat4& view) { mView = view; }
 
 	void SetItrs(int itrs) { mItrs = itrs; }
 
 private:
-	ComputeProgram mComputeProgram;
+	ComputeProgram mRaytraceProgram;
+	ComputeProgram mGenRaysProgram;
 	glm::ivec2 mSize;
 	uint32_t mNumSamples;
 	std::weak_ptr<Dicom> mDicom;
 
-	GLuint mPosTexture;
-	GLuint mDirTexture;
-	GLuint mColorTexture;
+	//pos: xyzw -> xyz-theta
+	//accum: xyzw -> rgb-phi
+	UniqueTexture mPosTexture;
+	UniqueTexture mAccumTexture;
+	UniqueTexture mColorTexture;
 
 	glm::vec3 mScaleFactor;
 	glm::vec3 mLowerBound;

@@ -151,26 +151,26 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="DrawQuad.h" />
-    <ClInclude Include="PiecewiseFunction.h" />
-    <ClInclude Include="src\ComputeProgram.h" />
-    <ClInclude Include="src\Cubemap.h" />
     <ClInclude Include="src\Dicom.h" />
+    <ClInclude Include="src\GLObjects.h" />
+    <ClInclude Include="src\PiecewiseFunction.h" />
     <ClInclude Include="src\RaytracePass.h" />
     <ClInclude Include="src\stb_image.h" />
     <ClInclude Include="Window.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="raymarch.glsl" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="src\ComputeProgram.cpp" />
-    <ClCompile Include="src\Cubemap.cpp" />
     <ClCompile Include="src\Dicom.cpp" />
     <ClCompile Include="src\DrawQuad.cpp" />
+    <ClCompile Include="src\GLObjects.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\PiecewiseFunction.cpp" />
     <ClCompile Include="src\RaytracePass.cpp" />
     <ClCompile Include="src\Window.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\common.glsl" />
+    <None Include="shaders\gen_rays.glsl" />
+    <None Include="shaders\raymarch.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

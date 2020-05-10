@@ -21,16 +21,7 @@
     <ClInclude Include="DrawQuad.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\ComputeProgram.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\RaytracePass.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="PiecewiseFunction.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\Cubemap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\stb_image.h">
@@ -39,18 +30,18 @@
     <ClInclude Include="src\Dicom.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="raymarch.glsl" />
+    <ClInclude Include="src\GLObjects.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\PiecewiseFunction.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\RaytracePass.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\ComputeProgram.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\Dicom.cpp">
@@ -65,8 +56,13 @@
     <ClCompile Include="src\PiecewiseFunction.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\Cubemap.cpp">
+    <ClCompile Include="src\GLObjects.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\raymarch.glsl" />
+    <None Include="shaders\common.glsl" />
+    <None Include="shaders\gen_rays.glsl" />
   </ItemGroup>
 </Project>

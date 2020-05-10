@@ -89,8 +89,7 @@ Dicom::Dicom(std::string folder)
 		std::copy(pixels, pixels + w * h, std::begin(data) + w * h * i);
 	}
 
-	glGenTextures(1, &mTexture);
-	glBindTexture(GL_TEXTURE_3D, mTexture);
+	glBindTexture(GL_TEXTURE_3D, mUniqueTexture.Get());
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
