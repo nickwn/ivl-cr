@@ -3,7 +3,7 @@
 #include <algorithm>
 
 RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::shared_ptr<Dicom> dicom)
-	: mRaytraceProgram("shaders/raymarch.glsl", { "numSamples", "scaleFactor", "lowerBound", "view", "itrs" })
+	: mRaytraceProgram("shaders/raymarch.glsl", { "numSamples", "scaleFactor", "lowerBound", "view", "itrs", "depth" })
 	, mGenRaysProgram("shaders/gen_rays.glsl", { "numSamples", "view", "itrs"})
 	, mSize(size)
 	, mNumSamples(samples)
@@ -52,6 +52,7 @@ void RaytracePass::Execute()
 	mGenRaysProgram.UpdateUniform("itrs", mItrs);
 	mGenRaysProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
 
+	//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	glBindImageTexture(0, mColorTexture.Get(), 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);
 	mRaytraceProgram.Use();
 	mRaytraceProgram.UpdateUniform("numSamples", GLuint(mNumSamples));
@@ -59,8 +60,23 @@ void RaytracePass::Execute()
 	mRaytraceProgram.UpdateUniform("lowerBound", mLowerBound);
 	mRaytraceProgram.UpdateUniform("view", mView);
 	mRaytraceProgram.UpdateUniform("itrs", mItrs);
+	mRaytraceProgram.UpdateUniform("depth", GLuint(1));
 	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+
+	//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+	mRaytraceProgram.UpdateUniform("depth", GLuint(2));
 	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+
+	mRaytraceProgram.UpdateUniform("depth", GLuint(3));
+	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+
+	mRaytraceProgram.UpdateUniform("depth", GLuint(4));
+	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+
+	mRaytraceProgram.UpdateUniform("depth", GLuint(5));
+	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
 	mItrs++;
 }

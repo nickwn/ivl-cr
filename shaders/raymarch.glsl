@@ -6,14 +6,16 @@ layout(rgba16f, binding = 0) uniform image2D imgOutput;
 layout(binding = 1) uniform sampler3D rawVolume;
 layout(binding = 2) uniform sampler1D transferLUT;
 layout(binding = 3) uniform sampler1D opacityLUT;
-layout(binding = 4) uniform samplerCube cubemap;
+layout(binding = 4) uniform samplerCube irrCubemap;
 layout(rgba16f, binding = 5) uniform image2D rayPosTex;
 layout(rgba16f, binding = 6) uniform image2D accumTex;
+layout(binding = 7) uniform samplerCube cubemap;
 uniform uint numSamples;
 uniform vec3 scaleFactor;
 uniform vec3 lowerBound;
 uniform mat4 view;
 uniform int itrs;
+uniform uint depth;
 
 // from Trevor Headstrom's code
 vec2 rayBox(vec3 ro, vec3 rd, vec3 mn, vec3 mx) {
@@ -36,10 +38,63 @@ void ONB(const vec3 n, out vec3 b1, out vec3 b2)
     b2 = vec3(b, sign + n.y * n.y * a, -n.y);
 }
 
-// surface brdf function
+// surface brdf functions
 vec3 lambertian(vec3 color, vec3 wo, vec3 n)
 {
     return color * max(0.0, dot(wo, n)) / pi;
+}
+
+// clearcoat
+// https://schuttejoe.github.io/post/disneybsdf/
+float pow5(float x) 
+{
+    float x2 = x * x;
+    return x2 * x2 * x;
+}
+
+float Fresnel(float F0, float cosA) 
+{
+    return F0 + (1 - F0) * pow5(1 - cosA);
+}
+
+float GTR1(float absDotHL, float a)
+{
+    if (a >= 1) {
+        return invPi;
+    }
+
+    float a2 = a * a;
+    return (a2 - 1.0) / (pi * log2(a2) * (1.0 + (a2 - 1.0) * absDotHL * absDotHL));
+}
+
+float SeparableSmithGGXG1(vec3 w, vec3 n, float a)
+{
+    float a2 = a * a;
+    float absDotNV = abs(dot(w, n));
+
+    return 2.0 / (1.0 + sqrt(a2 + (1 - a2) * absDotNV * absDotNV));
+}
+
+float EvaluateDisneyClearcoat(float clearcoat, float alpha, vec3 wo, vec3 wm, vec3 wi, vec3 n)
+{
+    if (clearcoat <= 0.0) {
+        return 0.0;
+    }
+
+    float absDotNH = abs(dot(wm, n));
+    float absDotNL = abs(dot(wi, n));
+    float absDotNV = abs(dot(wo, n));
+    float dotHL = dot(wm, wi);
+
+    float d = GTR1(absDotNH, mix(0.1, 0.001, alpha));
+    float f = Fresnel(0.04, dotHL);
+    float gl = SeparableSmithGGXG1(wi, n, 0.25);
+    float gv = SeparableSmithGGXG1(wo, n, 0.25);
+
+    //fPdfW = d / (4.0f * absDotNL);
+    //rPdfW = d / (4.0f * absDotNV);
+
+    return 0.25 * clearcoat * d * f * gl * gv;
 }
 
 vec3 sampleLambertian(vec3 n, vec2 uv)
@@ -69,26 +124,40 @@ vec3 schlickPhase(vec3 color, vec3 wo, vec3 wi, float k)
 // doesn't work
 vec3 sampleSchlickPhase(vec3 wi, vec2 uv)
 {
-    uv = uv * 2 - 1;
-    vec2 uv2 = uv * uv;
-    float x = 2 * uv.x * sqrt(1 - uv2.x - uv2.y);
-    float y = 2 * uv.y * sqrt(1 - uv2.x - uv2.y);
-    float z = 1 - 2 * (uv2.x + uv2.y);
-    return vec3(x, y, z);
+    float theta = twoPi * uv.x;
+    float phi = acos(2.0 * uv.y - 1.0);
+
+    return vec3(
+        sin(phi) * cos(theta),
+        sin(phi) * sin(theta),
+        cos(phi)
+    );
 }
 
 // probability that brdf will be used vs phase function
 float pBRDF(float opacity, float gradMag, float g)
 {
-    return opacity * (1 - pow(e, -25 * g * g * g * gradMag));
+    return opacity * (1.0 - pow(10.0, -25 * g * g * g * gradMag));
 }
 
 vec3 calcGradient(vec3 tuv)
 {
+    vec3 highVals = vec3(
+        textureOffset(rawVolume, tuv, ivec3(1, 0, 0)).r,
+        textureOffset(rawVolume, tuv, ivec3(0, 1, 0)).r,
+        textureOffset(rawVolume, tuv, ivec3(0, 0, 1)).r
+    );
+
+    vec3 lowVals = vec3(
+        textureOffset(rawVolume, tuv, ivec3(-1, 0, 0)).r,
+        textureOffset(rawVolume, tuv, ivec3(0, -1, 0)).r,
+        textureOffset(rawVolume, tuv, ivec3(0, 0, -1)).r
+    );
+
     return -vec3( 
-        textureOffset(rawVolume, tuv, ivec3(1, 0, 0)).r - textureOffset(rawVolume, tuv, ivec3(-1, 0, 0)).r,
-        textureOffset(rawVolume, tuv, ivec3(0, 1, 0)).r - textureOffset(rawVolume, tuv, ivec3(0, -1, 0)).r,
-        textureOffset(rawVolume, tuv, ivec3(0, 0, 1)).r - textureOffset(rawVolume, tuv, ivec3(0, 0, -1)).r
+        texture(opacityLUT, highVals.x).r - texture(opacityLUT, lowVals.x).r,
+        texture(opacityLUT, highVals.y).r - texture(opacityLUT, lowVals.y).r,
+        texture(opacityLUT, highVals.z).r - texture(opacityLUT, lowVals.z).r
     );
 }
 
@@ -101,7 +170,7 @@ const float stepSize = 0.01;
 const float maxAccum = 2.0;
 const float densityScale = 0.01;
 
-void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 ps, out vec3 rel, out float density)
+void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 ps, out vec3 rel, out float density, out float opacity)
 {
     float s = -log(noise()) * densityScale;
     float sum = 0.0f;
@@ -119,7 +188,7 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 ps, out
         }
 
         density = texture(rawVolume, rel).r;
-        float opacity = texture(opacityLUT, density).r;
+        opacity = texture(opacityLUT, density).r;
 
         float sigmaT = density * opacity;
 
@@ -164,7 +233,7 @@ void main()
     // early out if no bb hit
     if (isect.x >= isect.y)
     {
-        vec3 missCol = texture(cubemap, rd).rgb * accum;
+        vec3 missCol = texture(irrCubemap, rd).rgb * accum;
         imageStore(imgOutput, index, vec4(missCol, 1.0));
         imageStore(accumTex, index, vec4(0.f));
         return;
@@ -176,15 +245,23 @@ void main()
 
     uint hit = 1;
     vec3 ps = vec3(0.0), rel = vec3(0.0);
-    float density = 0.0;
-    trace(ro, rd, isect, hit, ps, rel, density);
+    float density = 0.0, opacity = 0.0;
+    trace(ro, rd, isect, hit, ps, rel, density, opacity);
 
-    if (hit==0)
+    vec4 invItr = vec4(1.0 / float(itrs));
+    vec3 missCol = texture(irrCubemap, rd).rgb * (1-hit) * accum;
+    vec4 newCol = imageLoad(imgOutput, index);
+    if (depth == 1)
     {
-        vec3 missCol = texture(cubemap, rd).rgb;
-        vec4 invItr = vec4(accum, 1.0) / float(itrs);
-        // TODO: fix this, average in drawquad and accumulate in this shader
-        vec4 newCol = imageLoad(imgOutput, index) * (1.0 - invItr) + vec4(missCol, 1.0) * invItr;
+        newCol = newCol * (1.0 - invItr) + vec4(missCol, 1.0) * invItr;
+    }
+    else
+    {
+        newCol = newCol + vec4(missCol, 1.0) * 0.5 * invItr;
+    }
+
+    if (hit == 0)
+    {
         imageStore(imgOutput, index, newCol);
         imageStore(accumTex, index, vec4(0.f));
         return;
@@ -196,38 +273,28 @@ void main()
     vec3 grad = calcGradient(rel);
     vec2 uv = noise2();
     vec3 wi = -rd, wo = vec3(0.0), pct = vec3(0.0);
-    float pbrdf = pBRDF(density, length(grad), 1.0);
+    float pbrdf = pBRDF(opacity, length(grad), 1.0);
     if (noise() < 1.0)
     {
         vec3 n = normalize(grad);
+        
         wo = sampleLambertian(n, uv);
+        vec3 wm = normalize(wo + wi);
         pct = lambertian(col, wo, n);
+        /*if (opacity > 0.5)
+        {
+            pct += vec3(EvaluateDisneyClearcoat(10.0, 1.0, wo, wm, wi, n)) * 10.0;
+        }*/
     }
     else
     {
         wo = sampleSchlickPhase(wi, uv);
-        pct = schlickPhase(col, wo, wi, 0.0);
+        pct = schlickPhase(col, wo, wi, -0.3);
     }
 
-    isect = rayBox(ps, wo, lowerBound, -1.0 * lowerBound);
-    isect.y = min(isect.y, farT);
-    
-    // init woodcock tracking from light source
-    ro = ps + isect.y * wo;
-    rd = -wo;
-    trace(ro, rd, isect, hit, ps, rel, density);
-
-    vec3 incomingRadiance = texture(cubemap, wo).rgb * 1.5;
-    
-    vec3 thpt = twoPi * pct * (1 - hit);
-    col = thpt * incomingRadiance; 
-
-    // output to a specific pixel in the image
-    vec4 invItr = vec4(accum, 1.0) / float(itrs);
-    // TODO: fix this, average in drawquad and accumulate in this shader
-    vec4 newCol = imageLoad(imgOutput, index) * (1.0 - invItr) + vec4(col, 1.0) * invItr;
     imageStore(imgOutput, index, newCol);
 
+    vec3 thpt = twoPi * pct;
     rayPosPk.xyz = ps;
     rayPosPk.w = acos(wo.z);
     imageStore(rayPosTex, index, rayPosPk);

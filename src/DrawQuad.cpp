@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <glm/glm.hpp>
 
+#include "GLObjects.h"
+
 void attachShader(GLuint mProgram, GLenum type, const char* code) {
 	GLuint shader = glCreateShader(type);
 	glShaderSource(shader, 1, &code, NULL);
@@ -39,41 +41,13 @@ DrawQuad::DrawQuad(glm::ivec2 size, uint32_t samples)
 	mProgram = glCreateProgram();
 	glObjectLabel(GL_PROGRAM, mProgram, -1, "TextureCopy");
 
-	attachShader(mProgram, GL_VERTEX_SHADER, R"(
-	  #version 450 core
-	  layout(location=0) in vec2 coord;
-	  void main(void) {
-		gl_Position = vec4(coord, 0.0, 1.0);
-	  }
-	)");
+	GLuint vertShader = glCreateShader(GL_VERTEX_SHADER);
+	readCompileAttachShader("shaders/draw_quad.vert", vertShader, mProgram);
 
-	attachShader(mProgram, GL_FRAGMENT_SHADER, R"(
-	  #version 450 core
-	  readonly restrict uniform layout(rgba16f) image2D image;
-	  uniform uint samples;
-	  layout(location=0) out vec4 color;
-	  void main(void) {
-		vec3 col3 = vec3(0.0);
-		for(uint i = 0; i < samples; i++)
-		{
-			col3 += imageLoad(image, ivec2(gl_FragCoord.xy) * ivec2(samples, 1) + ivec2(i, 0)).xyz;
-		}
-		color = vec4(col3/samples, 1.0);
-	  }
-	)");
+	GLuint fragShader = glCreateShader(GL_FRAGMENT_SHADER);
+	readCompileAttachShader("shaders/draw_quad.frag", fragShader, mProgram);
 
-	glLinkProgram(mProgram);
-	GLint result;
-	GLint infoLogSz;
-	glGetProgramiv(mProgram, GL_LINK_STATUS, &result);
-	glGetProgramiv(mProgram, GL_INFO_LOG_LENGTH, &infoLogSz);
-	if (result != GL_TRUE) {
-		std::string errMsg;
-		errMsg.resize(infoLogSz + 1);
-		glGetProgramInfoLog(mProgram, infoLogSz, nullptr, errMsg.data());
-		std::cerr << errMsg;
-		throw std::runtime_error(errMsg);
-	}
+	linkProgram(mProgram);
 }
 
 DrawQuad::~DrawQuad()

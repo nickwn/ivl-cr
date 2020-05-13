@@ -47,6 +47,9 @@ private:
 	UniqueTexture mUniqueTexture;
 };
 
+void readCompileAttachShader(const std::string& filename, GLuint shader, GLuint program);
+void linkProgram(GLuint program);
+
 class ComputeProgram
 {
 public:

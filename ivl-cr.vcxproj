@@ -169,6 +169,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\common.glsl" />
+    <None Include="shaders\draw_quad.frag" />
+    <None Include="shaders\draw_quad.vert" />
     <None Include="shaders\gen_rays.glsl" />
     <None Include="shaders\raymarch.glsl" />
   </ItemGroup>

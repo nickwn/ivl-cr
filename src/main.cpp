@@ -134,13 +134,22 @@ int main()
 	glActiveTexture(GL_TEXTURE3);
 	opacityPF.EvaluateTexture(100);
 
-	std::string cubemapFolder = "cubemaps/indoors_irr/";
+	std::string irrCubemapFolder = "cubemaps/indoors_irr/";
+	std::vector<std::string> irrCubemapFiles = {
+		irrCubemapFolder + "negx.bmp", irrCubemapFolder + "posx.bmp",
+		irrCubemapFolder + "posy.bmp", irrCubemapFolder + "negy.bmp",
+		irrCubemapFolder + "posz.bmp", irrCubemapFolder + "negz.bmp"
+	};
+	glActiveTexture(GL_TEXTURE4);
+	Cubemap irrCubemap(irrCubemapFiles);
+
+	std::string cubemapFolder = "cubemaps/indoors/";
 	std::vector<std::string> cubemapFiles = {
-		cubemapFolder + "negx.bmp", cubemapFolder + "posx.bmp",
+		cubemapFolder + "posx.bmp", cubemapFolder + "negx.bmp",
 		cubemapFolder + "posy.bmp", cubemapFolder + "negy.bmp",
 		cubemapFolder + "posz.bmp", cubemapFolder + "negz.bmp"
 	};
-	glActiveTexture(GL_TEXTURE4);
+	glActiveTexture(GL_TEXTURE7);
 	Cubemap cubemap(cubemapFiles);
 
 	const uint32_t numSamples = 2;
@@ -159,7 +168,7 @@ int main()
 		raytracePass.Execute();
 
 		// make sure writing to image has finished before read
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
 		//glClear(GL_COLOR_BUFFER_BIT);
 		drawQuad.Execute(raytracePass.GetColorTexture());

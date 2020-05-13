@@ -83,7 +83,7 @@ std::string processIncludes(std::string source, const std::string& includeDir)
 	return source;
 }
 
-ComputeProgram::ComputeProgram(std::string filename, std::vector<std::string> uniforms)
+void readCompileAttachShader(const std::string& filename, GLuint shader, GLuint program)
 {
 	std::string buffer;
 	std::ifstream file(filename, std::ios::in);
@@ -104,40 +104,52 @@ ComputeProgram::ComputeProgram(std::string filename, std::vector<std::string> un
 	file.read(&buffer[0], size);
 
 	std::string fullSource = processIncludes(buffer, includeDir);
-	
-	mShader = glCreateShader(GL_COMPUTE_SHADER);
+
 	char const* bufPtr = fullSource.c_str();
-	glShaderSource(mShader, 1, &bufPtr, nullptr);
-	glCompileShader(mShader);
+	glShaderSource(shader, 1, &bufPtr, nullptr);
+	glCompileShader(shader);
 
 	GLint result = GL_FALSE;
 	int infoLogSz;
-	glGetShaderiv(mShader, GL_COMPILE_STATUS, &result);
-	glGetShaderiv(mShader, GL_INFO_LOG_LENGTH, &infoLogSz);
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
+	glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &infoLogSz);
 	if (infoLogSz > 0)
 	{
 		std::string errMsg;
 		errMsg.resize(infoLogSz + 1);
-		glGetShaderInfoLog(mShader, infoLogSz, nullptr, errMsg.data());
+		glGetShaderInfoLog(shader, infoLogSz, nullptr, errMsg.data());
 		std::cerr << errMsg;
 		throw std::runtime_error("shader compilation error");
 	}
 
-	mProgram = glCreateProgram();
-	glAttachShader(mProgram, mShader);
-	glLinkProgram(mProgram);
+	glAttachShader(program, shader);
+}
+
+void linkProgram(GLuint program)
+{
+	glLinkProgram(program);
 
 	// Check the program.
-	glGetProgramiv(mProgram, GL_LINK_STATUS, &result);
-	glGetProgramiv(mProgram, GL_INFO_LOG_LENGTH, &infoLogSz);
+	GLint result = GL_FALSE;
+	int infoLogSz;
+	glGetProgramiv(program, GL_LINK_STATUS, &result);
+	glGetProgramiv(program, GL_INFO_LOG_LENGTH, &infoLogSz);
 	if (infoLogSz > 0)
 	{
 		std::string errMsg;
 		errMsg.resize(infoLogSz + 1);
-		glGetProgramInfoLog(mProgram, infoLogSz, nullptr, errMsg.data());
+		glGetProgramInfoLog(program, infoLogSz, nullptr, errMsg.data());
 		std::cerr << errMsg;
 		throw std::runtime_error("shader link err");
 	}
+}
+
+ComputeProgram::ComputeProgram(std::string filename, std::vector<std::string> uniforms)
+{	
+	mShader = glCreateShader(GL_COMPUTE_SHADER);
+	mProgram = glCreateProgram();
+	readCompileAttachShader(filename, mShader, mProgram);
+	linkProgram(mProgram);
 
 	for (const std::string& uniform : uniforms)
 	{
