@@ -1,5 +1,6 @@
 #version 430
 #pragma include("common.glsl")
+#pragma include("materials.glsl")
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f, binding = 0) uniform image2D imgOutput;
@@ -10,6 +11,7 @@ layout(binding = 4) uniform samplerCube irrCubemap;
 layout(rgba16f, binding = 5) uniform image2D rayPosTex;
 layout(rgba16f, binding = 6) uniform image2D accumTex;
 layout(binding = 7) uniform samplerCube cubemap;
+layout(binding = 8) uniform sampler1D clearcoatLUT;
 uniform uint numSamples;
 uniform vec3 scaleFactor;
 uniform vec3 lowerBound;
@@ -25,119 +27,6 @@ vec2 rayBox(vec3 ro, vec3 rd, vec3 mn, vec3 mx) {
     vec3 tmin = min(t0, t1);
     vec3 tmax = max(t0, t1);
     return vec2(max(max(tmin.x, tmin.y), tmin.z), min(min(tmax.x, tmax.y), tmax.z));
-}
-
-// from https://graphics.pixar.com/library/OrthonormalB/paper.pdf
-// why does pixar have an 8 page paper on calculating an ONB
-void ONB(const vec3 n, out vec3 b1, out vec3 b2)
-{
-    const float sign = sign(n.z);
-    const float a = -1.0f / (sign + n.z);
-    const float b = n.x * n.y * a;
-    b1 = vec3(1.0f + sign * n.x * n.x * a, sign * b, -sign * n.x);
-    b2 = vec3(b, sign + n.y * n.y * a, -n.y);
-}
-
-// surface brdf functions
-vec3 lambertian(vec3 color, vec3 wo, vec3 n)
-{
-    return color * max(0.0, dot(wo, n)) / pi;
-}
-
-// clearcoat
-// https://schuttejoe.github.io/post/disneybsdf/
-float pow5(float x) 
-{
-    float x2 = x * x;
-    return x2 * x2 * x;
-}
-
-float Fresnel(float F0, float cosA) 
-{
-    return F0 + (1 - F0) * pow5(1 - cosA);
-}
-
-float GTR1(float absDotHL, float a)
-{
-    if (a >= 1) {
-        return invPi;
-    }
-
-    float a2 = a * a;
-    return (a2 - 1.0) / (pi * log2(a2) * (1.0 + (a2 - 1.0) * absDotHL * absDotHL));
-}
-
-float SeparableSmithGGXG1(vec3 w, vec3 n, float a)
-{
-    float a2 = a * a;
-    float absDotNV = abs(dot(w, n));
-
-    return 2.0 / (1.0 + sqrt(a2 + (1 - a2) * absDotNV * absDotNV));
-}
-
-float EvaluateDisneyClearcoat(float clearcoat, float alpha, vec3 wo, vec3 wm, vec3 wi, vec3 n)
-{
-    if (clearcoat <= 0.0) {
-        return 0.0;
-    }
-
-    float absDotNH = abs(dot(wm, n));
-    float absDotNL = abs(dot(wi, n));
-    float absDotNV = abs(dot(wo, n));
-    float dotHL = dot(wm, wi);
-
-    float d = GTR1(absDotNH, mix(0.1, 0.001, alpha));
-    float f = Fresnel(0.04, dotHL);
-    float gl = SeparableSmithGGXG1(wi, n, 0.25);
-    float gv = SeparableSmithGGXG1(wo, n, 0.25);
-
-    //fPdfW = d / (4.0f * absDotNL);
-    //rPdfW = d / (4.0f * absDotNV);
-
-    return 0.25 * clearcoat * d * f * gl * gv;
-}
-
-vec3 sampleLambertian(vec3 n, vec2 uv)
-{
-    vec3 b1, b2;
-    ONB(n, b1, b2);
-
-    float r = sqrt(uv.x);
-    float theta = 2 * pi * uv.y;
-
-    float x = r * cos(theta);
-    float y = r * sin(theta);
-
-    vec3 s = vec3(x, y, sqrt(max(0.0, 1 - uv.x)));
-    return normalize(s.x * b1 + s.y * b2 + s.z * n);
-}
-
-// volume phase function
-vec3 schlickPhase(vec3 color, vec3 wo, vec3 wi, float k)
-{
-    float cosTheta = dot(wi, -wo);
-    float a = (1 + k * cosTheta);
-    return color * (1 - k * k) / (4 * pi * a * a);
-    //return vec3(2.0) * (1 - k * k) / (4 * pi * a * a);
-}
-
-// doesn't work
-vec3 sampleSchlickPhase(vec3 wi, vec2 uv)
-{
-    float theta = twoPi * uv.x;
-    float phi = acos(2.0 * uv.y - 1.0);
-
-    return vec3(
-        sin(phi) * cos(theta),
-        sin(phi) * sin(theta),
-        cos(phi)
-    );
-}
-
-// probability that brdf will be used vs phase function
-float pBRDF(float opacity, float gradMag, float g)
-{
-    return opacity * (1.0 - pow(10.0, -25 * g * g * g * gradMag));
 }
 
 vec3 calcGradient(vec3 tuv)
@@ -161,13 +50,8 @@ vec3 calcGradient(vec3 tuv)
     );
 }
 
-const vec2 screenRes = vec2(1280.0, 720.0); // todo: make uniform
-const vec2 halfRes = screenRes * 0.5;
-const float z = 1.0 / tan(radians(45.0) * 0.5);
 const float farT = 5.0; // hehe
-
 const float stepSize = 0.01;
-const float maxAccum = 2.0;
 const float densityScale = 0.01;
 
 void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 ps, out vec3 rel, out float density, out float opacity)
@@ -251,7 +135,9 @@ void main()
     vec4 invItr = vec4(1.0 / float(itrs));
     vec3 missCol = texture(irrCubemap, rd).rgb * (1-hit) * accum;
     vec4 newCol = imageLoad(imgOutput, index);
-    if (depth == 1)
+
+    // mix if ray was computed as mix (imgOutput.a == 0)
+    if (newCol.a == 0.0)
     {
         newCol = newCol * (1.0 - invItr) + vec4(missCol, 1.0) * invItr;
     }
@@ -272,36 +158,43 @@ void main()
     // shade with brdf or phase function (but rn just brdf)
     vec3 grad = calcGradient(rel);
     vec2 uv = noise2();
-    vec3 wi = -rd, wo = vec3(0.0), pct = vec3(0.0);
-    float pbrdf = pBRDF(opacity, length(grad), 1.0);
-    if (noise() < 1.0)
+    vec3 wo = -rd, wi = vec3(0.0), pct = vec3(0.0);
+    float pbrdf = pBRDF(opacity, length(grad), 1.0), pdf = 0.f;
+    bool additive = false;
+    if (noise() < pbrdf)
     {
         vec3 n = normalize(grad);
-        
-        wo = sampleLambertian(n, uv);
-        vec3 wm = normalize(wo + wi);
-        pct = lambertian(col, wo, n);
-        /*if (opacity > 0.5)
+        float pClearcoat = texture(clearcoatLUT, density).r;
+        if (noise() < pClearcoat && itrs > 1)
         {
-            pct += vec3(EvaluateDisneyClearcoat(10.0, 1.0, wo, wm, wi, n)) * 10.0;
-        }*/
+            vec3 wm;
+            wi = SampleDisneyClearcoat(wo, n, wm);
+            pct = vec3(EvaluateDisneyClearcoat(pClearcoat, 0.9, wo, wm, wi, n, pdf));
+            additive = true;
+        }
+        else
+        {
+            wi = sampleLambertian(n, uv);
+            pct = lambertian(col, wi, n, pdf);
+        }
     }
     else
     {
-        wo = sampleSchlickPhase(wi, uv);
-        pct = schlickPhase(col, wo, wi, -0.3);
+        wi = sampleSchlickPhase(wi, uv);
+        pct = schlickPhase(col, wi, wo, -0.3, pdf);
     }
 
+    newCol.a = additive ? 1.0 : 0.0;
     imageStore(imgOutput, index, newCol);
 
-    vec3 thpt = twoPi * pct;
+    vec3 thpt = pct / pdf;
     rayPosPk.xyz = ps;
-    rayPosPk.w = acos(wo.z);
+    rayPosPk.w = acos(wi.z);
     imageStore(rayPosTex, index, rayPosPk);
 
-    float phiOff = wo.x < 0.0 ? pi : 0.0;
+    float phiOff = wi.x < 0.0 ? pi : 0.0;
     accumPk.rgb = accum * thpt; 
-    accumPk.a = phiOff + atan(wo.y / wo.x);
+    accumPk.a = phiOff + atan(wi.y / wi.x);
     imageStore(accumTex, index, accumPk);
 
 }

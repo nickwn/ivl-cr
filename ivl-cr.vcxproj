@@ -156,7 +156,7 @@
     <ClInclude Include="src\PiecewiseFunction.h" />
     <ClInclude Include="src\RaytracePass.h" />
     <ClInclude Include="src\stb_image.h" />
-    <ClInclude Include="Window.h" />
+    <ClInclude Include="src\Window.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Dicom.cpp" />
@@ -172,6 +172,8 @@
     <None Include="shaders\draw_quad.frag" />
     <None Include="shaders\draw_quad.vert" />
     <None Include="shaders\gen_rays.glsl" />
+    <None Include="shaders\materials.glsl" />
+    <None Include="shaders\precompute.glsl" />
     <None Include="shaders\raymarch.glsl" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

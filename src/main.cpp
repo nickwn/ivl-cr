@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <algorithm>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -52,6 +53,16 @@ public:
 		}
 	}
 
+	void HandleScroll(std::shared_ptr<Window> window, const glm::dvec2& offset)
+	{
+		const float scaleFactor = 1.f + std::clamp(float(offset.y * .1f), -.9f, .9f);
+		
+		mLastCachedView[3][0] *= scaleFactor;
+		mLastCachedView[3][1] *= scaleFactor;
+		mLastCachedView[3][2] *= scaleFactor;
+		mViewDirtied = true;
+	}
+
 	glm::mat4 GetView() const
 	{
 		if (mDragStartPos)
@@ -87,7 +98,7 @@ private:
 
 int main()
 {
-	glm::ivec2 size = glm::ivec2(1280, 720);
+	glm::ivec2 size = glm::ivec2(1920, 1080);
 	std::shared_ptr<Window> win = std::make_shared<Window>(size, "Cinematic Renderer");
 
 	const glm::mat4 initialView = glm::translate(glm::vec3(0.f, 0.f, -3.f));
@@ -98,7 +109,8 @@ int main()
 	const GLubyte* renderer = glGetString(GL_RENDERER);
 	std::cout << renderer << "\n";
 
-	std::string folder = "scans/Larry_Smarr_2016/";
+	std::string folder = "scans/Larry_2017/";
+	//std::string folder = "scans/Larry_Smarr_2016/";
 	//std::string folder = "scans/HNSCC/HNSCC-01-0617/12-16-2012-017-27939/2.000000-ORALNASOPHARYNX-41991/";
 	//std::string folder = "scans/HNSCC/HNSCC-01-0620/12-16-2012-002-29827/2.000000-ORALNASOPHARYNX-84704/";
 	//std::string folder = "scans/HNSCC/HNSCC-01-0618/12-16-2012-002-07039/2.000000-ORALNASOPHARYNX-35559/";
@@ -107,11 +119,10 @@ int main()
 
 	using ColorPF = PLF<float, glm::vec4>;
 	ColorPF colorPF;
-	//colorPF.AddStop(0.f, glm::vec4(0.f, 0.f, 0.f, 1.f));
-	//colorPF.AddStop(1.f, glm::vec4(1.f, 1.f, 1.f, 1.f));
-	colorPF.AddStop(0.f, glm::vec4(.7f, 0.f, 0.f, 1.f));
-	colorPF.AddStop(.55f, glm::vec4(.7f, 0.f, 0.f, 1.f));
-	colorPF.AddStop(1.f, glm::vec4(1.f, 1.f, 1.f, 1.f));
+	colorPF.AddStop(0.f, glm::vec4(1.f, 0.f, 0.f, 1.f));
+	colorPF.AddStop(.6f, glm::vec4(1.f, 0.f, 0.f, 1.f));
+	colorPF.AddStop(.8f, glm::vec4(1.f, .3f, 0.f, 1.f));
+	colorPF.AddStop(1.f, glm::vec4(1.f, .3f, 0.f, 1.f));
 
 	// warren's transfer func
 	//colorPF.AddStop(0.f, glm::vec4(.62f, .62f, .64f, 1.f));
@@ -128,17 +139,27 @@ int main()
 	OpacityPF opacityPF;
 	opacityPF.AddStop(0.f, 0.f);
 	//opacityPF.AddStop(.5f, 0.f);
-	opacityPF.AddStop(.2f, 0.f);
+	opacityPF.AddStop(.3f, 0.f);
 	opacityPF.AddStop(1.f, .5f);
 
 	glActiveTexture(GL_TEXTURE3);
 	opacityPF.EvaluateTexture(100);
 
-	std::string irrCubemapFolder = "cubemaps/indoors_irr/";
+	using ClearcoatPF = PLF<float, float>;
+	ClearcoatPF clearcoatPF;
+	clearcoatPF.AddStop(0.f, 0.f);
+	clearcoatPF.AddStop(.7f, 0.f);
+	clearcoatPF.AddStop(.8f, .05f);
+	clearcoatPF.AddStop(1.f, .05f);
+
+	glActiveTexture(GL_TEXTURE8);
+	clearcoatPF.EvaluateTexture(100);
+
+	std::string irrCubemapFolder = "cubemaps/studio1/";
 	std::vector<std::string> irrCubemapFiles = {
-		irrCubemapFolder + "negx.bmp", irrCubemapFolder + "posx.bmp",
-		irrCubemapFolder + "posy.bmp", irrCubemapFolder + "negy.bmp",
-		irrCubemapFolder + "posz.bmp", irrCubemapFolder + "negz.bmp"
+		irrCubemapFolder + "posx.hdr", irrCubemapFolder + "negx.hdr",
+		irrCubemapFolder + "posy.hdr", irrCubemapFolder + "negy.hdr",
+		irrCubemapFolder + "posz.hdr", irrCubemapFolder + "negz.hdr"
 	};
 	glActiveTexture(GL_TEXTURE4);
 	Cubemap irrCubemap(irrCubemapFiles);
@@ -152,7 +173,7 @@ int main()
 	glActiveTexture(GL_TEXTURE7);
 	Cubemap cubemap(cubemapFiles);
 
-	const uint32_t numSamples = 2;
+	const uint32_t numSamples = 1;
 	RaytracePass raytracePass(size, numSamples, dicom);
 	DrawQuad drawQuad = DrawQuad(size, numSamples);
 

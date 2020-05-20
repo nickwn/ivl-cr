@@ -2,13 +2,14 @@
 #pragma include("common.glsl")
 
 layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba16f, binding = 0) uniform image2D imgOutput;
 layout(rgba16f, binding = 5) uniform image2D rayPosTex;
 layout(rgba16f, binding = 6) uniform image2D accumTex;
 uniform uint numSamples;
 uniform mat4 view;
 uniform int itrs;
 
-const vec2 screenRes = vec2(1280.0, 720.0); // todo: make uniform
+const vec2 screenRes = vec2(1920.0, 1080.0); // todo: make uniform
 const vec2 halfRes = screenRes * 0.5;
 const float z = 1.0 / tan(radians(45.0) * 0.5);
 
@@ -34,6 +35,9 @@ void main()
     float phiOff = rd.x < 0.0 ? pi : 0.0;
     vec4 rayPosPk = vec4(ro, acos(rd.z)); // xyz-theta
     vec4 accumPk = vec4(vec3(1.0), phiOff + atan(rd.y / rd.x)); // rgb-phi
+
+    vec4 lastImgVal = imageLoad(imgOutput, index);
+    imageStore(imgOutput, index, vec4(lastImgVal.rgb, 0.0)); // force first sample to be mix
 
     imageStore(rayPosTex, index, rayPosPk);
     imageStore(accumTex, index, accumPk);

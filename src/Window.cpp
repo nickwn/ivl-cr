@@ -51,6 +51,13 @@ Window::Window(const glm::ivec2& size, std::string title)
 			listener.lock()->HandleButton(gWindowMap[window], button, action, mods);
 		}
 	});
+
+	glfwSetScrollCallback(mWindow, [](GLFWwindow* window, double xoffset, double yoffset) {
+		for (auto& listener : gWindowMap[window]->mListeners)
+		{
+			listener.lock()->HandleScroll(gWindowMap[window], glm::dvec2(xoffset, yoffset));
+		}
+	});
 }
 
 Window::~Window()

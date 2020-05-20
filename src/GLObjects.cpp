@@ -74,7 +74,7 @@ std::string processIncludes(std::string source, const std::string& includeDir)
 
 			size_t newBegin = std::distance(std::cbegin(source), srcBegin) + buffer.size();
 			source.replace(srcBegin, srcEnd, buffer);
-			srcBegin = std::next(std::begin(source), newBegin);
+			srcBegin = std::next(std::begin(source), newBegin + 1);
 		}
 
 		else if (srcEnd != std::end(source)) srcBegin = srcEnd + 1;

@@ -1,6 +1,7 @@
 const float pi = 3.141592653589;
 const float twoPi = pi * 2.0;
-const float invPi = 1 / pi;
+const float invPi = 1.0 / pi;
+const float invFourPi = 1.0 / (4.0 * pi);
 const float e = 2.718281828459045;
 
 uint state[4];

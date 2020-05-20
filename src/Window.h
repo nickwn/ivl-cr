@@ -15,6 +15,7 @@ class MouseListener
 public:
 	virtual void HandleMotion(std::shared_ptr<Window> window, const glm::vec2& pos) {}
 	virtual void HandleButton(std::shared_ptr<Window> window, int button, int action, int mods) {}
+	virtual void HandleScroll(std::shared_ptr<Window> window, const glm::dvec2& offset) {}
 };
 
 class Window : public std::enable_shared_from_this<Window>
