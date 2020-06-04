@@ -23,6 +23,7 @@ public:
 		, mDragStartPos()
 		, mCurrDelta()
 		, mViewDirtied(false)
+		, mResample(true)
 	{}
 
 	void HandleMotion(std::shared_ptr<Window> window, const glm::vec2& pos) override
@@ -51,6 +52,13 @@ public:
 				mLastCachedView = *mCurrDelta * mLastCachedView;
 			}
 		}
+		else if (button == GLFW_MOUSE_BUTTON_RIGHT)
+		{
+			if (action == GLFW_PRESS)
+			{
+				mResample = !mResample;
+			}
+		}
 	}
 
 	void HandleScroll(std::shared_ptr<Window> window, const glm::dvec2& offset)
@@ -70,6 +78,11 @@ public:
 			return *mCurrDelta * mLastCachedView;
 		}
 		return mLastCachedView;
+	}
+
+	bool GetShouldResample() const
+	{
+		return mResample;
 	}
 
 	bool GetIsViewDirtied() const
@@ -94,6 +107,7 @@ private:
 	std::optional<glm::mat4> mCurrDelta;
 	glm::mat4 mLastCachedView;
 	bool mViewDirtied;
+	bool mResample;
 };
 
 int main()
@@ -119,10 +133,10 @@ int main()
 
 	using ColorPF = PLF<float, glm::vec4>;
 	ColorPF colorPF;
-	colorPF.AddStop(0.f, glm::vec4(1.f, 0.f, 0.f, 1.f));
-	colorPF.AddStop(.6f, glm::vec4(1.f, 0.f, 0.f, 1.f));
-	colorPF.AddStop(.8f, glm::vec4(1.f, .3f, 0.f, 1.f));
-	colorPF.AddStop(1.f, glm::vec4(1.f, .3f, 0.f, 1.f));
+	colorPF.AddStop(0.f, glm::vec4(.8f, 0.f, 0.f, 1.f));
+	colorPF.AddStop(.3f, glm::vec4(.8f, 0.f, 0.f, 1.f));
+	colorPF.AddStop(.5f, glm::vec4(1.f, .8f, 0.f, 1.f));
+	colorPF.AddStop(1.f, glm::vec4(1.f, .8f, 0.f, 1.f));
 
 	// warren's transfer func
 	//colorPF.AddStop(0.f, glm::vec4(.62f, .62f, .64f, 1.f));
@@ -139,8 +153,8 @@ int main()
 	OpacityPF opacityPF;
 	opacityPF.AddStop(0.f, 0.f);
 	//opacityPF.AddStop(.5f, 0.f);
-	opacityPF.AddStop(.3f, 0.f);
-	opacityPF.AddStop(1.f, .5f);
+	opacityPF.AddStop(.2f, 0.f);
+	opacityPF.AddStop(1.f, 1.f);
 
 	glActiveTexture(GL_TEXTURE3);
 	opacityPF.EvaluateTexture(100);
@@ -148,11 +162,11 @@ int main()
 	using ClearcoatPF = PLF<float, float>;
 	ClearcoatPF clearcoatPF;
 	clearcoatPF.AddStop(0.f, 0.f);
-	clearcoatPF.AddStop(.7f, 0.f);
-	clearcoatPF.AddStop(.8f, .05f);
-	clearcoatPF.AddStop(1.f, .05f);
+	clearcoatPF.AddStop(.6f, 0.f);
+	clearcoatPF.AddStop(.7f, .5f);
+	clearcoatPF.AddStop(1.f, .5f);
 
-	glActiveTexture(GL_TEXTURE8);
+	glActiveTexture(GL_TEXTURE7);
 	clearcoatPF.EvaluateTexture(100);
 
 	std::string irrCubemapFolder = "cubemaps/studio1/";
@@ -163,15 +177,6 @@ int main()
 	};
 	glActiveTexture(GL_TEXTURE4);
 	Cubemap irrCubemap(irrCubemapFiles);
-
-	std::string cubemapFolder = "cubemaps/indoors/";
-	std::vector<std::string> cubemapFiles = {
-		cubemapFolder + "posx.bmp", cubemapFolder + "negx.bmp",
-		cubemapFolder + "posy.bmp", cubemapFolder + "negy.bmp",
-		cubemapFolder + "posz.bmp", cubemapFolder + "negz.bmp"
-	};
-	glActiveTexture(GL_TEXTURE7);
-	Cubemap cubemap(cubemapFiles);
 
 	const uint32_t numSamples = 1;
 	RaytracePass raytracePass(size, numSamples, dicom);
@@ -186,7 +191,7 @@ int main()
 
 		const glm::mat4 view = viewController->GetView();
 		raytracePass.SetView(view);
-		raytracePass.Execute();
+		raytracePass.Execute(viewController->GetShouldResample());
 
 		// make sure writing to image has finished before read
 		//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);

@@ -14,7 +14,7 @@ struct LinearInterp
 {
 	inline V operator()(const K& k, const K& k0, const V& v0, const K& k1, const V& v1) const
 	{
-		const float p = k / (k1 - k0);
+		const float p = (k - k0) / (k1 - k0);
 		return v0 * (1.f - p) + v1 * p;
 	}
 };

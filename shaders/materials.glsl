@@ -2,7 +2,7 @@
 // why does pixar have an 8 page paper on calculating an ONB
 void ONB(const vec3 n, out vec3 b1, out vec3 b2)
 {
-    const float sign = sign(n.z);
+    const float sign = n.z < 0.0 ? -1.0 : 1.0; // sign(n.z);
     const float a = -1.0f / (sign + n.z);
     const float b = n.x * n.y * a;
     b1 = vec3(1.0f + sign * n.x * n.x * a, sign * b, -sign * n.x);
@@ -10,24 +10,37 @@ void ONB(const vec3 n, out vec3 b1, out vec3 b2)
 }
 
 // surface brdf functions
-vec3 lambertian(vec3 color, vec3 wo, vec3 n, out float pdf)
+vec3 lambertian(vec3 color)
 {
-    pdf = invPi * 0.5;
-    return color * max(0.0, dot(wo, n)) / pi;
+    return color * invPi;
 }
 
-vec3 sampleLambertian(vec3 n, vec2 uv)
+float lambertianPDF(float wiDotN)
+{
+    return invPi * wiDotN;
+}
+
+vec3 sampleLambertian(vec3 n)
 {
     vec3 b1, b2;
     ONB(n, b1, b2);
 
-    float r = sqrt(uv.x);
+    /*float r = sqrt(uv.x);
     float theta = 2 * pi * uv.y;
 
     float x = r * cos(theta);
     float y = r * sin(theta);
 
-    vec3 s = vec3(x, y, sqrt(max(0.0, 1 - uv.x)));
+    vec3 s = vec3(x, y, sqrt(max(0.0, 1 - uv.x)));*/
+    
+    vec2 uv = noise2();
+    float theta = acos(sqrt(uv.x));
+    float phi = twoPi * uv.y;
+    vec3 s = vec3(
+        cos(phi) * sin(theta),
+        sin(phi) * sin(theta),
+        cos(theta)
+    );
     return normalize(s.x * b1 + s.y * b2 + s.z * n);
 }
 
@@ -62,31 +75,34 @@ float SeparableSmithGGXG1(vec3 w, vec3 n, float a)
     return 2.0 / (1.0 + sqrt(a2 + (1 - a2) * absDotNV * absDotNV));
 }
 
-float EvaluateDisneyClearcoat(float clearcoat, float alpha, vec3 wo, vec3 wm, vec3 wi, vec3 n, out float pdf)
+float EvaluateDisneyClearcoat(float clearcoat, float alpha, vec3 wo, vec3 wm, vec3 wi, vec3 n, 
+    out float d)
 {
     if (clearcoat <= 0.0) {
         return 0.0;
     }
 
-    float absDotNH = abs(dot(wm, n));
-    float absDotNL = abs(dot(wi, n));
-    float absDotNV = abs(dot(wo, n));
+    float absDotNH = dot(wm, n);
+    float absDotNL = dot(wi, n);
+    float absDotNV = dot(wo, n);
     float dotHL = dot(wm, wi);
 
-    float d = GTR1(absDotNH, mix(0.1, 0.001, alpha));
+    d = GTR1(absDotNH, mix(0.1, 0.001, alpha));
     float f = Fresnel(0.04, dotHL);
     float gl = SeparableSmithGGXG1(wi, n, 0.25);
     float gv = SeparableSmithGGXG1(wo, n, 0.25);
 
-    pdf = d / (4.0 * absDotNV);
-
     return 0.25 * clearcoat * d * f * gl * gv;
 }
 
-vec3 SampleDisneyClearcoat(vec3 wo, vec3 n, out vec3 wm)
+float clearcoatPDF(float d, float absDotMV)
 {
-    float a = 0.25;
-    float a2 = a * a;
+    return d / (4.0 * absDotMV);
+}
+
+vec3 SampleDisneyClearcoat(vec3 wo, vec3 n, out vec3 wm, float alpha)
+{
+    float a2 = alpha * alpha;
 
     float r0 = noise();
     float r1 = noise();

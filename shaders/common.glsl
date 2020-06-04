@@ -38,6 +38,48 @@ uint nextUInt() {
     return result;
 }
 
+void jump() 
+{
+    const uint JUMP[] = { 0xb523952e, 0x0b6f099f, 0xccf5a0ef, 0x1c580662 };
+
+    uint s0 = 0;
+    uint s1 = 0;
+    uint s2 = 0;
+    uint s3 = 0;
+    for (int i = 0; i < 4; i++)
+    {
+        for (int b = 0; b < 32; b++) 
+        {
+            if ((JUMP[i] & (1u << b)) != 0) 
+            {
+                s0 ^= state[0];
+                s1 ^= state[1];
+                s2 ^= state[2];
+                s3 ^= state[3];
+            }
+            nextUInt();
+        }
+    }
+
+    state[0] = s0;
+    state[1] = s1;
+    state[2] = s2;
+    state[3] = s3;
+}
+
+void initRNG(ivec2 index, int itrs)
+{
+    int seed1 = hash(index.x);
+    int seed2 = hash(index.y);
+    int seed3 = hash(itrs);
+    state[0] = seed1 ^ seed3;
+    state[1] = seed2 ^ seed3;
+    state[2] = index.x ^ seed2;
+    state[3] = index.y ^ seed1;
+    nextUInt(); nextUInt();
+    //jump();
+}
+
 // from https://github.com/wjakob/pcg32/blob/master/pcg32.h
 float noise()
 {

@@ -20,13 +20,7 @@ void main()
     ivec2 screenIndex = ivec2(index.x / numSamples, index.y);
 
     // TODO: seed better
-    int seed1 = hash(index.x);
-    int seed2 = hash(index.y);
-    int seed3 = hash(itrs);
-    state[0] = seed1 ^ seed3;
-    state[1] = seed2 ^ seed3;
-    state[2] = index.x ^ seed2;
-    state[3] = index.y ^ seed1;
+    initRNG(index, itrs);
 
     vec2 clip = (vec2(screenIndex.xy + noise2()) - halfRes) / halfRes.y;
     vec3 rd = (view * vec4(normalize(vec3(clip, z)), 0.0)).xyz;

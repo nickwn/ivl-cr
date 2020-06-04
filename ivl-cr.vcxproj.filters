@@ -61,12 +61,15 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\raymarch.glsl" />
     <None Include="shaders\common.glsl" />
     <None Include="shaders\gen_rays.glsl" />
     <None Include="shaders\draw_quad.vert" />
     <None Include="shaders\draw_quad.frag" />
     <None Include="shaders\precompute.glsl" />
     <None Include="shaders\materials.glsl" />
+    <None Include="shaders\resample.glsl" />
+    <None Include="shaders\raymarch_ris.glsl" />
+    <None Include="shaders\raymarch.glsl" />
+    <None Include="shaders\denoise.glsl" />
   </ItemGroup>
 </Project>
