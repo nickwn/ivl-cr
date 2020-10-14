@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <array>
 #include <algorithm>
 
 #include <gl/glew.h>
@@ -52,8 +53,6 @@ public:
 		GenTexture(evals);
 	}
 
-	GLuint GetTexture() const { return mTexture; }
-
 private:
 
 	std::vector<V> Evaluate(const uint32_t size) const
@@ -90,3 +89,25 @@ using PLF = PiecewiseFunction<K, V, LinearInterp<K, V>>;
 
 template<typename K, typename V>
 using PCF = PiecewiseFunction<K, V, ConstInterp<K, V>>;
+
+class SimpleTransferFunction
+{
+public:
+	SimpleTransferFunction(std::vector<std::array<float, 5>> opacityTriangles, std::array<float, 3> contrast) :
+		mOpacityTriangles(std::move(opacityTriangles)),
+		mContrast(contrast),
+		mUniqueOpacityTexture(),
+		mUniqueColorTexture()
+	{}
+
+	void EvaluateOpacityTexture(const uint32_t size) const;
+	void EvaluateColorTexture(const uint32_t size) const;
+
+private:
+	
+	std::vector<std::array<float, 5>> mOpacityTriangles;
+	std::array<float, 3> mContrast;
+
+	UniqueTexture mUniqueOpacityTexture;
+	UniqueTexture mUniqueColorTexture;
+};

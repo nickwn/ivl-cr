@@ -6,7 +6,7 @@ const float e = 2.718281828459045;
 
 uint state[4];
 
-int hash(int x) {
+uint hash(uint x) {
     x += (x << 10u);
     x ^= (x >> 6u);
     x += (x << 3u);
@@ -69,9 +69,10 @@ void jump()
 
 void initRNG(ivec2 index, int itrs)
 {
-    int seed1 = hash(index.x);
-    int seed2 = hash(index.y);
-    int seed3 = hash(itrs);
+    uint rand = floatBitsToUint(fract(sin(dot(vec2(index), vec2(12.9898,78.233)))*43758.5453123));
+    uint seed1 = hash(index.x) ^ rand;
+    uint seed2 = hash(index.y) ^ rand;
+    uint seed3 = hash(itrs);
     state[0] = seed1 ^ seed3;
     state[1] = seed2 ^ seed3;
     state[2] = index.x ^ seed2;

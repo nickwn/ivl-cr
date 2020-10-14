@@ -1,0 +1,22 @@
+---
+scan-folder: scans/Larry_2017/
+output-path: output/render1.png
+color-plf: 
+  0.0: [0.8, 0.0, 0.0, 1.0]
+  0.3: [0.8, 0.0, 0.0, 1.0]
+  0.5: [1.0, 0.8, 0.0, 1.0]
+  1.0: [1.0, 0.8, 0.0, 1.0]
+opacity-plf:
+  0.0: 0.0
+  0.2: 0.0
+  0.8: 1.0
+  1.0: 1.0
+clearcoat-plf:
+  0.0: 0.0
+  0.6: 0.0
+  0.7: 0.5
+  1.0: 0.5
+cubemap-data:
+  folder: cubemaps/studio1/
+  filenames: [posx.hdr, negx.hdr, posy.hdr, negy.hdr, posz.hdr, negz.hdr]
+  

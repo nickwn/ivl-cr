@@ -88,12 +88,12 @@ void RaytracePass::Execute(bool resample)
 	mRaytraceProgram.UpdateUniform("depth", GLuint(5));
 	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
 
-	//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-	glBindImageTexture(6, mDenoiseTexture.Get(), 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);
-	mDenoiseProgram.Use();
-	mDenoiseProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
-	mDenoiseProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
-	glBindImageTexture(6, mAccumTexture.Get(), 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+	//glBindImageTexture(6, mDenoiseTexture.Get(), 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);
+	//mDenoiseProgram.Use();
+	//mDenoiseProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+	//mDenoiseProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+	//glBindImageTexture(6, mAccumTexture.Get(), 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);
 
 	mItrs++;
 }

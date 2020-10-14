@@ -16,11 +16,12 @@ public:
 
 	void Execute(bool resample);
 
-	const UniqueTexture& GetColorTexture() { return mDenoiseTexture; }
+	const UniqueTexture& GetColorTexture() { return mColorTexture; }
 
 	void SetView(const glm::mat4& view) { mView = view; }
 
 	void SetItrs(int itrs) { mItrs = itrs; }
+	int GetItrs() const { return mItrs; }
 
 private:
 	ComputeProgram mRaytraceProgram;
@@ -43,6 +44,6 @@ private:
 	glm::vec3 mLowerBound;
 	glm::mat4 mView;
 
-	int mItrs;
+	int mItrs;  
 };
 

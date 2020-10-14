@@ -3,8 +3,6 @@
 #include <stdexcept>
 #include <unordered_map>
 
-#include <glm/glm.hpp>
-
 std::unordered_map<GLFWwindow*, std::shared_ptr<Window>> gWindowMap;
 
 Window::Window(const glm::ivec2& size, std::string title)
@@ -37,6 +35,7 @@ Window::Window(const glm::ivec2& size, std::string title)
 	int width, height;
 	glfwGetFramebufferSize(mWindow, &width, &height);
 	glViewport(0, 0, width, height);
+	mFramebufferSize = glm::ivec2(width, height);
 
 	glfwSetCursorPosCallback(mWindow, [](GLFWwindow* window, double xpos, double ypos) {
 		for (auto& listener : gWindowMap[window]->mListeners)

@@ -50,8 +50,9 @@ vec3 calcGradient(vec3 tuv)
 }
 
 const float farT = 5.0; // hehe
-const float stepSize = 0.01;
+const float stepSize = 0.002;
 const float densityScale = 0.01;
+const float lightingMult = 1.0;
 
 void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 ps, out vec3 rel, out float density, out float opacity)
 {
@@ -110,7 +111,7 @@ void main()
     // early out if no bb hit
     if (isect.x >= isect.y)
     {
-        vec3 missCol = texture(irrCubemap, rd).rgb * accum;
+        vec3 missCol = texture(irrCubemap, rd).rgb * accum * lightingMult;
         imageStore(imgOutput, index, vec4(missCol, 1.0));
         imageStore(accumTex, index, vec4(0.f));
         return;
@@ -126,7 +127,7 @@ void main()
     trace(ro, rd, isect, hit, ps, rel, density, opacity);
 
     vec4 invItr = vec4(1.0 / float(itrs));
-    vec3 missCol = texture(irrCubemap, rd).rgb * (1 - hit) * accum;
+    vec3 missCol = texture(irrCubemap, rd).rgb * (1 - hit) * accum * lightingMult;
     vec4 newCol = imageLoad(imgOutput, index);
 
     // mix if ray was computed as mix (imgOutput.a == 0)

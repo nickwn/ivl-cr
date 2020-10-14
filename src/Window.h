@@ -6,7 +6,7 @@
 
 #include <gl/glew.h>
 #include <GLFW/glfw3.h>
-#include <glm/fwd.hpp>
+#include <glm/glm.hpp>
 
 class Window;
 
@@ -29,8 +29,10 @@ public:
 
 	glm::vec2 GetMousePos() const;
 	void AddMouseListener(std::shared_ptr<MouseListener> listener);
+	glm::ivec2 GetFramebufferSize() const { return mFramebufferSize; }
 
 private:
+	glm::ivec2 mFramebufferSize;
 	std::vector<std::weak_ptr<MouseListener>> mListeners;
 	GLFWwindow* mWindow;
 };
