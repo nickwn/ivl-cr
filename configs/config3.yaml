@@ -1,0 +1,39 @@
+---
+name: new
+volume:
+  pos: [0.0, 0.0, 0.0]
+  scale: [1.0, 1.0, 1.0]
+  rotation: [0.9727135, 0.018041437, 0.23130894, 0.0, -0.0011439843, 0.9973326, -0.07297787,
+    0.0, -0.23200823, 0.07072184, 0.9701394, 0.0, 0.0, 0.0, 0.0, 1.0]
+camera:
+  pos: [0.0, 0.0, 3.0]
+  up: [0.0, 1.0, 0.0]
+  center: [0.0, 0.0, 2.0]
+render mode: Texture-based
+transfer function:
+  contrast: [0.3, 0.5]
+  opacity:
+  - [1.0, 0.0, 2.0, 0.0, 1.0]
+  gradient: [[0.8, 0.0, 0.0], [1.0, 0.8, 0.0]]
+  color scheme: RGB-gradient
+cutting plane:
+  status: false
+  freeze volume: false
+  freeze plane: false
+  real value: false
+  Center Line Travel: false
+  Traversal View: false
+  percentage: 0.0
+  ppoint: [0.0, 0.0, 0.6]
+  pnorm: [0.0, 0.0, -1.0]
+  traversal target: Colon
+mask:
+  status: false
+  recolor: true
+  volume: true
+  mesh: true
+  wireframe: true
+  center line: false
+  value: [false, false, false, true, false, false, false, false]
+cubemap: studio1
+itrs: 100

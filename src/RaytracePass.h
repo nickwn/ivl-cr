@@ -28,6 +28,7 @@ private:
 	ComputeProgram mGenRaysProgram;
 	ComputeProgram mResampleProgram;
 	ComputeProgram mDenoiseProgram;
+	ComputeProgram mPrecomputeProgram;
 	glm::ivec2 mSize;
 	uint32_t mNumSamples;
 	std::weak_ptr<Dicom> mDicom;
@@ -39,6 +40,7 @@ private:
 	UniqueTexture mColorTexture;
 	//UniqueTexture mReservoirTexture;
 	UniqueTexture mDenoiseTexture;
+	UniqueTexture mBakedVolumeTexture;
 
 	glm::vec3 mScaleFactor;
 	glm::vec3 mLowerBound;

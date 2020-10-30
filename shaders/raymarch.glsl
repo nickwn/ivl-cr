@@ -4,13 +4,14 @@
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f, binding = 0) uniform image2D imgOutput;
-layout(binding = 1) uniform sampler3D rawVolume;
+layout(binding = 1) uniform sampler3D rawVolume; // TODO: remove
 layout(binding = 2) uniform sampler1D transferLUT;
-layout(binding = 3) uniform sampler1D opacityLUT;
+//layout(binding = 3) uniform sampler1D opacityLUT;
+layout(binding = 3) uniform sampler3D sigmaVolume;
 layout(binding = 4) uniform samplerCube irrCubemap;
 layout(rgba16f, binding = 5) uniform image2D rayPosTex;
 layout(rgba16f, binding = 6) uniform image2D accumTex;
-layout(binding = 7) uniform sampler1D clearcoatLUT;
+layout(binding = 7) uniform sampler1D clearcoatLUT; // TODO: replace with cubic function?
 uniform uint numSamples;
 uniform vec3 scaleFactor;
 uniform vec3 lowerBound;
@@ -42,11 +43,13 @@ vec3 calcGradient(vec3 tuv)
         textureOffset(rawVolume, tuv, ivec3(0, 0, -1)).r
     );
 
-    return -vec3(
+    /*return -vec3(
         texture(opacityLUT, highVals.x).r - texture(opacityLUT, lowVals.x).r,
         texture(opacityLUT, highVals.y).r - texture(opacityLUT, lowVals.y).r,
         texture(opacityLUT, highVals.z).r - texture(opacityLUT, lowVals.z).r
-    );
+    );*/
+
+    return -vec3(highVals.x - lowVals.x, highVals.y - lowVals.y, highVals.z - lowVals.z);
 }
 
 const float farT = 5.0; // hehe
@@ -71,14 +74,17 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 ps, out
             break;
         }
 
-        density = texture(rawVolume, rel).r;
-        opacity = texture(opacityLUT, density).r;
+        //density = texture(rawVolume, rel).r;
+        //opacity = texture(opacityLUT, density).r;
 
-        float sigmaT = density * opacity;
+        float sigmaT = texture(sigmaVolume, rel).r;
 
         sum += sigmaT * stepSize;
         isect.x += stepSize;
     }
+
+    density = texture(rawVolume, rel).r;
+    opacity = texture(sigmaVolume, rel).r / density;
 }
 
 void main()

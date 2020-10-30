@@ -7,6 +7,7 @@
 #include <optional>
 #include <algorithm>
 #include <filesystem>
+#include <variant>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -245,7 +246,7 @@ int main(int argc, char* argv[])
 	static const std::string configsDir = "configs/";
 	static const std::string scansDir = "scans/";
 
-	std::string configFilename = configsDir + "config2.yaml";
+	std::string configFilename = configsDir + "config3.yaml";
 	std::string scanFolder = scansDir + "Larry_2017/";
 
 	if (argc > 1)
@@ -283,7 +284,6 @@ int main(int argc, char* argv[])
 	// Context is created, so now we can init textures
 
 	YAML::Node transferFunction = config["transfer function"];
-	std::array<float, 3> contrastVals = transferFunction["contrast"].as<std::array<float, 3>>();
 
 	YAML::Node opacityTrianglesNode = transferFunction["opacity"];
 	std::vector<std::array<float, 5>> opacityTriangles;
@@ -293,12 +293,49 @@ int main(int argc, char* argv[])
 		opacityTriangles.push_back(triangle);
 	}
 
-	SimpleTransferFunction opacityColorTF = SimpleTransferFunction(opacityTriangles, contrastVals);
+	OpacityTransferFunction opacityTF = OpacityTransferFunction(opacityTriangles);
 
-	glActiveTexture(GL_TEXTURE2);
-	opacityColorTF.EvaluateColorTexture(100);
 	glActiveTexture(GL_TEXTURE3);
-	opacityColorTF.EvaluateOpacityTexture(100);
+	opacityTF.EvaluateTexture(100);
+
+	using ColorPLF = PLF<float, glm::vec4>;
+	std::unique_ptr<HSVTransferFunction> hsvTF;
+	std::unique_ptr<ColorPLF> rgbTF;
+	std::string colorScheme = transferFunction["color scheme"].as<std::string>();
+	if (colorScheme == std::string("HSV"))
+	{
+		std::array<float, 3> contrastVals = transferFunction["contrast"].as<std::array<float, 3>>();
+		hsvTF = std::make_unique<HSVTransferFunction>(contrastVals);
+
+		glActiveTexture(GL_TEXTURE2);
+		hsvTF->EvaluateTexture(100);
+	}
+	else if (colorScheme == std::string("RGB-gradient"))
+	{
+		std::vector<float> stopPositions = transferFunction["contrast"].as<std::vector<float>>();
+		std::vector<glm::vec3> stopColors = transferFunction["gradient"].as<std::vector<glm::vec3>>();
+
+		if (stopPositions.front() != 0.f)
+		{
+			stopPositions.insert(std::begin(stopPositions), 0.f);
+			stopColors.insert(std::begin(stopColors), stopColors.front());
+		}
+
+		if (stopPositions.back() != 1.f)
+		{
+			stopPositions.push_back(1.f);
+			stopColors.push_back(stopColors.back());
+		}
+
+		rgbTF = std::make_unique<ColorPLF>();
+		for (size_t i = 0; i < stopPositions.size(); i++)
+		{
+			rgbTF->AddStop(stopPositions[i], glm::vec4(stopColors[i], 1.f));
+		}
+
+		glActiveTexture(GL_TEXTURE2);
+		rgbTF->EvaluateTexture(100);
+	}
 
 	// Clearcoat PLF
 	using ClearcoatPF = PLF<float, float>;
@@ -326,11 +363,12 @@ int main(int argc, char* argv[])
 	glActiveTexture(GL_TEXTURE1);
 	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(scanFolder);
 
+	const uint32_t numSamples = 1;
+	RaytracePass raytracePass(size, numSamples, dicom);
+
 	glActiveTexture(GL_TEXTURE4);
 	Cubemap cubemap(cubemapFiles);
 
-	const uint32_t numSamples = 1;
-	RaytracePass raytracePass(size, numSamples, dicom);
 	DrawQuad drawQuad = DrawQuad(size, numSamples);
 
 	ImageWriter imageWriter = ImageWriter(scanFolder);
@@ -343,7 +381,7 @@ int main(int argc, char* argv[])
 			raytracePass.SetItrs(1);
 		}
 
-		if (raytracePass.GetItrs() == requiredItrs && !imageWritten)
+		if (requiredItrs != 0 &&    raytracePass.GetItrs() == requiredItrs && !imageWritten)
 		{
 			imageWriter.WriteImage(win.get());
 			imageWritten = true;

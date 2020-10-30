@@ -7,6 +7,7 @@ RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::
 	, mGenRaysProgram("shaders/gen_rays.glsl", { "numSamples", "view", "itrs" })
 	, mResampleProgram("shaders/resample.glsl", { "numSamples" })
 	, mDenoiseProgram("shaders/denoise.glsl", {})
+	, mPrecomputeProgram("shaders/precompute.glsl", {})
 	, mSize(size)
 	, mNumSamples(samples)
 	, mDicom(dicom)
@@ -42,6 +43,28 @@ RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::
 	mView = glm::mat4(1.f);
 	mLowerBound = glm::vec3(0.f);
 	mScaleFactor = glm::vec3(0.f);
+
+	glActiveTexture(GL_TEXTURE4);
+	glBindTexture(GL_TEXTURE_3D, mBakedVolumeTexture.Get());
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_R16, dicom->GetScanSize().x, dicom->GetScanSize().y, dicom->GetScanSize().z, 0, GL_RED, GL_UNSIGNED_SHORT, nullptr);
+
+	glBindImageTexture(1, dicom->GetTexture().Get(), 0, GL_FALSE, 0, GL_READ_ONLY, GL_R16);
+	glBindImageTexture(4, mBakedVolumeTexture.Get(), 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R16);
+	mPrecomputeProgram.Use();
+	mPrecomputeProgram.Execute(dicom->GetScanSize().x / 8, dicom->GetScanSize().y / 8, dicom->GetScanSize().z / 8);
+
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_3D, dicom->GetTexture().Get());
+
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_3D, mBakedVolumeTexture.Get());
 }
 
 void RaytracePass::Execute(bool resample)
@@ -54,14 +77,16 @@ void RaytracePass::Execute(bool resample)
 	const glm::vec3 boundDim = (upperBound - mLowerBound);
 	mScaleFactor = 1.f / boundDim;
 
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+
 	mGenRaysProgram.Use();
 	mGenRaysProgram.UpdateUniform("numSamples", GLuint(mNumSamples));
 	mGenRaysProgram.UpdateUniform("view", mView);
 	mGenRaysProgram.UpdateUniform("itrs", mItrs);
 	mGenRaysProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
 
-	//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-	glBindImageTexture(0, mColorTexture.Get(), 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+
 	mRaytraceProgram.Use();
 	mRaytraceProgram.UpdateUniform("numSamples", GLuint(mNumSamples));
 	mRaytraceProgram.UpdateUniform("scaleFactor", mScaleFactor);
@@ -70,30 +95,28 @@ void RaytracePass::Execute(bool resample)
 	mRaytraceProgram.UpdateUniform("itrs", mItrs);
 	mRaytraceProgram.UpdateUniform("depth", GLuint(1));
 	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
-	//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+	
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 
-	//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	mRaytraceProgram.UpdateUniform("depth", GLuint(2));
 	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
 
-	//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+
 	mRaytraceProgram.UpdateUniform("depth", GLuint(3));
 	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
 
-	//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+
 	mRaytraceProgram.UpdateUniform("depth", GLuint(4));
 	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+	
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 
-	//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	mRaytraceProgram.UpdateUniform("depth", GLuint(5));
 	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
 
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-	//glBindImageTexture(6, mDenoiseTexture.Get(), 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);
-	//mDenoiseProgram.Use();
-	//mDenoiseProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
-	//mDenoiseProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
-	//glBindImageTexture(6, mAccumTexture.Get(), 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);
-
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+	
 	mItrs++;
 }

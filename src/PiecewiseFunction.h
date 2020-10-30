@@ -90,6 +90,38 @@ using PLF = PiecewiseFunction<K, V, LinearInterp<K, V>>;
 template<typename K, typename V>
 using PCF = PiecewiseFunction<K, V, ConstInterp<K, V>>;
 
+class HSVTransferFunction
+{
+public:
+	HSVTransferFunction(const std::array<float, 3>& contrast) :
+		mContrast(contrast),
+		mUniqueColorTexture()
+	{}
+
+	void EvaluateTexture(const uint32_t size) const;
+
+private:
+	std::array<float, 3> mContrast;
+	UniqueTexture mUniqueColorTexture;
+};
+
+class OpacityTransferFunction
+{
+public:
+	OpacityTransferFunction(const std::vector<std::array<float, 5>>& opacityTriangles) :
+		mOpacityTriangles(opacityTriangles),
+		mUniqueOpacityTexture()
+	{}
+
+	void EvaluateTexture(const uint32_t size) const;
+
+private:
+	
+	std::vector<std::array<float, 5>> mOpacityTriangles;
+
+	UniqueTexture mUniqueOpacityTexture;
+};
+
 class SimpleTransferFunction
 {
 public:
@@ -104,7 +136,7 @@ public:
 	void EvaluateColorTexture(const uint32_t size) const;
 
 private:
-	
+
 	std::vector<std::array<float, 5>> mOpacityTriangles;
 	std::array<float, 3> mContrast;
 
