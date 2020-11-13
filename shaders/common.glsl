@@ -67,7 +67,7 @@ void jump()
     state[3] = s3;
 }
 
-void initRNG(ivec2 index, int itrs)
+void initRNG(ivec2 index, uint itrs)
 {
     uint rand = floatBitsToUint(fract(sin(dot(vec2(index), vec2(12.9898,78.233)))*43758.5453123));
     uint seed1 = hash(index.x) ^ rand;

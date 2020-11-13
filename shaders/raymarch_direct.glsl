@@ -65,13 +65,14 @@ void main()
     // get index in global work group i.e x,y position
     ivec2 index = ivec2(gl_GlobalInvocationID.xy);
     ivec2 screenIndex = ivec2(index.x / numSamples, index.y);
+    uint sampleNum = index.x % numSamples;
 
     vec4 accumPk = imageLoad(accumTex, index);
     vec3 accum = accumPk.rgb;
     if (length(accum) < 0.0001) return;
 
     // TODO: seed better
-    initRNG(index, itrs);
+    initRNG(index, itrs * numSamples + sampleNum);
 
     vec4 rayPosPk = imageLoad(rayPosTex, index);
 

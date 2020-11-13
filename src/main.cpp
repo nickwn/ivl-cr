@@ -165,8 +165,8 @@ private:
 		const static glm::vec2 scaleFactor = glm::vec2(.5f, .5f);
 		const glm::vec2 delta = window->GetMousePos() - *mDragStartPos;
 		const glm::vec2 rotDelta = glm::radians(delta * scaleFactor);
-		const glm::mat4 azRot = glm::rotate(rotDelta.x, glm::vec3(0.f, 1.f, 0.f));
-		const glm::mat4 altRot = glm::rotate(rotDelta.y, glm::vec3(1.f, 0.f, 0.f));
+		const glm::mat4 azRot = glm::rotate(-rotDelta.x, glm::vec3(0.f, 1.f, 0.f));
+		const glm::mat4 altRot = glm::rotate(-rotDelta.y, glm::vec3(1.f, 0.f, 0.f));
 		return azRot * altRot;
 	}
 
@@ -298,7 +298,7 @@ int main(int argc, char* argv[])
 
 	// Camera matrix
 	YAML::Node cameraNode = config["camera"];
-	const glm::mat4 cameraMat = glm::lookAt(cameraNode["pos"].as<glm::vec3>(), cameraNode["center"].as<glm::vec3>(), cameraNode["up"].as<glm::vec3>());
+	const glm::mat4 cameraMat = glm::lookAt(cameraNode["pos"].as<glm::vec3>(), cameraNode["center"].as<glm::vec3>(), cameraNode["up"].as<glm::vec3>() * -1.f);
 
 	//const glm::mat4 initialView = glm::translate(glm::vec3(0.f, 0.f, -3.f)); // TODO: add this to config
 	const glm::mat4 initialView = volumeMat * cameraMat; // TODO: add this to config
@@ -387,7 +387,7 @@ int main(int argc, char* argv[])
 	glActiveTexture(GL_TEXTURE1);
 	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(scanFolder);
 
-	const uint32_t numSamples = 8;
+	const uint32_t numSamples = 4;
 	RaytracePass raytracePass(size, numSamples, dicom);
 
 	glActiveTexture(GL_TEXTURE4);

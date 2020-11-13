@@ -96,7 +96,7 @@ void main()
     if (length(accum) < 0.0001) return;
 
     // TODO: seed better
-    initRNG(index, itrs);
+    initRNG(index, itrs * numSamples + sampleNum);
 
     vec4 rayPosPk = imageLoad(rayPosTex, index);
 
@@ -156,7 +156,7 @@ void main()
     {
         const float alpha = 0.9;
         vec3 n = normalize(grad), wm = vec3(0.f);
-        if (sampleNum % 2 == 1)
+        if (noise() < .5f)
         {
             wi.xyz = SampleDisneyClearcoat(wo, n, wm, alpha);
             wiDotN = dot(wi.xyz, n);
