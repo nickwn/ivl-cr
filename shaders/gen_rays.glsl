@@ -31,8 +31,11 @@ void main()
     vec4 rayPosPk = vec4(ro, acos(rd.z)); // xyz-theta
     vec4 accumPk = vec4(vec3(1.0), phiOff + atan(rd.y / rd.x)); // rgb-phi
 
-    vec4 lastImgVal = imageLoad(imgOutput, index);
-    imageStore(imgOutput, index, vec4(lastImgVal.rgb, 0.0)); // force first sample to be mix
+    if(itrs == 1)
+    {
+        vec4 lastImgVal = imageLoad(imgOutput, index);
+        imageStore(imgOutput, index, vec4(lastImgVal.rgb, 1.0)); 
+    }
 
     imageStore(rayPosTex, index, rayPosPk);
     imageStore(accumTex, index, accumPk);

@@ -89,6 +89,7 @@ void main()
     // get index in global work group i.e x,y position
     ivec2 index = ivec2(gl_GlobalInvocationID.xy);
     ivec2 screenIndex = ivec2(index.x / numSamples, index.y);
+    uint sampleNum = index.x % numSamples;
 
     vec4 accumPk = imageLoad(accumTex, index);
     vec3 accum = accumPk.rgb;
@@ -129,22 +130,14 @@ void main()
     float density = 0.0, opacity = 0.0;
     trace(ro, rd, isect, hit, ps, rel, density, opacity);
 
-    vec4 invItr = vec4(1.0 / float(itrs));
-    vec3 missCol = texture(cubemap, rd).rgb * (1 - hit) * accum * lightingMult;
-    vec4 newCol = imageLoad(imgOutput, index);
-
-    // mix if ray was computed as mix (imgOutput.a == 0)
-    if (depth == 1)
-    {
-        newCol = newCol * (1.0 - invItr) + vec4(missCol, 1.0) * invItr;
-    }
-    else
-    {
-        newCol = newCol + vec4(missCol, 1.0) * 0.8 * invItr;
-    }
-
+    vec4 lastImgVal = imageLoad(imgOutput, index);
     if (hit == 0)
     {
+        vec4 invItr = vec4(1.0 / abs(lastImgVal.a));
+        vec3 missCol = texture(cubemap, rd).rgb * (1 - hit) * accum * lightingMult;
+        vec4 newCol = lastImgVal * (1.0 - invItr) + vec4(missCol, 1.0) * invItr;
+        newCol.a = abs(lastImgVal.a) + 1.f;
+
         imageStore(imgOutput, index, newCol);
         imageStore(accumTex, index, vec4(0.f));
         return;
@@ -153,34 +146,35 @@ void main()
     vec3 col = textureLod(sigmaVolume, rel, 0).rgb;
 
     // shade with brdf or phase function (but rn just brdf)
-    vec2 uv = noise2();
     vec3 wo = -rd, grad = calcGradient(rel), pct = vec3(0.0), f = vec3(0.0), thpt = vec3(0.f);
     float pbrdf = pBRDF(opacity, length(grad), 1.0), pdf = 0.f, wiDotN = 1.f;
     bool goodSample = true;
 
     // reservoir state
     vec4 wi = vec4(0.0); // y
-    if (noise() < pbrdf || true)
+    if (noise() < pbrdf)
     {
         const float alpha = 0.9;
         vec3 n = normalize(grad), wm = vec3(0.f);
-        if (false && noise() <= .5f) // disabled for now
+        if (sampleNum % 2 == 1)
         {
             wi.xyz = SampleDisneyClearcoat(wo, n, wm, alpha);
             wiDotN = dot(wi.xyz, n);
+            wi.w = 1.f;
         }
         else
         {
             wi.xyz = sampleLambertian(n);
             wiDotN = dot(wi.xyz, n);
+            wi.w = -1.f;
         }
 
         // TODO: find out where these stupid rare nans are coming from
-        //float d, absDotNL, pClearcoat = texture(clearcoatLUT, density).r;
-        //f = vec3(EvaluateDisneyClearcoat(pClearcoat, alpha, wo, wm, wi.xyz, n, d));
-        //pct = f * wiDotN;
-        //pdf = clearcoatPDF(d, dot(wo, wm));
-        //thpt += pdf == 0.0 || isnan(pdf) || any(isnan(pct)) ? vec3(0.0) : pct / pdf;
+        float d, absDotNL, pClearcoat = texture(clearcoatLUT, density).r;
+        f = vec3(EvaluateDisneyClearcoat(pClearcoat, alpha, wo, wm, wi.xyz, n, d));
+        pct = f * wiDotN;
+        pdf = clearcoatPDF(d, dot(wo, wm));
+        thpt += pdf == 0.0 || isnan(pdf) || any(isnan(pct)) ? vec3(0.0) : pct / pdf;
 
         f = lambertian(col);
         pdf = lambertianPDF(wiDotN);
@@ -189,22 +183,21 @@ void main()
     }
     else
     {
-        wi.xyz = sampleSchlickPhase(wo, uv);
+        wi.xyz = sampleSchlickPhase(wo, noise2());
         f = schlickPhase(col, wi.xyz, wo, 0.0, pdf);
         pct = f;
+        wi.w = -1.f;
 
         thpt = pct / pdf;
     }
 
-    newCol.a = wi.a;
     if (wiDotN < 0.f)
     {
         accum = vec3(0.f);
     }
     
-    //imageStore(imgOutput, index, newCol);
+    imageStore(imgOutput, index, vec4(lastImgVal.rgb, lastImgVal.a * wi.w));
 
-    // vec3 thpt = pct / pdf;
     rayPosPk.xyz = ps;
     rayPosPk.w = acos(wi.z);
     imageStore(rayPosTex, index, rayPosPk);

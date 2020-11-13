@@ -366,8 +366,8 @@ int main(int argc, char* argv[])
 	ClearcoatPF clearcoatPF;
 	clearcoatPF.AddStop(0.0f, 0.0f);
 	clearcoatPF.AddStop(0.6f, 0.0f);
-	clearcoatPF.AddStop(0.7f, 0.5f);
-	clearcoatPF.AddStop(1.0f, 0.5f);
+	clearcoatPF.AddStop(0.7f, 0.99f);
+	clearcoatPF.AddStop(1.0f, 0.99f);
 	glActiveTexture(GL_TEXTURE7);
 	clearcoatPF.EvaluateTexture(100);
 
@@ -409,7 +409,7 @@ int main(int argc, char* argv[])
 		if (requiredItrs != 0 && raytracePass.GetItrs() == requiredItrs && !imageWritten)
 		{
 			std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-			std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
+			std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[us]" << std::endl;
 			imageWriter.WriteImage(win.get());
 			imageWritten = true;
 		}

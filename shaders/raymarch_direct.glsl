@@ -33,24 +33,25 @@ const float stepSize = 0.001;
 const float densityScale = 0.01;
 const float lightingMult = 1.0;
 
-void trace(in vec3 ro, in vec3 rd, in vec2 isect, out vec3 transmittance)
+void trace(in vec3 ro, in vec3 rd, in vec2 isect, bool diffuse, out vec3 transmittance)
 {
-    const float cone_spread = 0.325f;
-    const float voxel_size = stepSize; // ??
-    const float mipmap_hardcap = 5.4f;
+    const float coneSpread = 0.325f;
+    const float voxelSize = stepSize; // ??
+    const float mipmapHardcap = 5.4f;
 
     isect.x = noise() * stepSize;
-    transmittance = vec3(1.f);
+    float multiplier = diffuse ? coneSpread / voxelSize : 0.f;
+    float additive = diffuse ? 0.f : stepSize;
     vec3 linearDensity = vec3(0.0f);
     while (isect.x < isect.y)
     {
         vec3 ps = ro + isect.x * rd;
         vec3 rel = (ps - lowerBound) * scaleFactor;
 
-        float l = (cone_spread * isect.x / voxel_size);
+        float l = additive + multiplier * isect.x;
         float level = log2(l);
 
-        vec4 bakedVal = textureLod(sigmaVolume, rel, min(mipmap_hardcap, level));
+        vec4 bakedVal = textureLod(sigmaVolume, rel, min(mipmapHardcap, level));
         vec3 sigmaT = vec3(pow(bakedVal.a, 1.5) * l) * (vec3(1.f) - bakedVal.rgb);
         
         linearDensity += sigmaT;
@@ -95,12 +96,17 @@ void main()
     ro += rd * isect.x;
     isect.y -= isect.x;
 
-    vec3 transmittance;
-    trace(ro, rd, isect, transmittance);
+    vec4 lastImgVal = imageLoad(imgOutput, index);
 
-    vec4 invItr = vec4(1.0 / float(itrs));
+    vec3 transmittance;
+    trace(ro, rd, isect, lastImgVal.a < 0.f, transmittance);
+
+    vec4 invItr = vec4(1.f / abs(lastImgVal.a));
     vec3 incoming = textureLod(irrCubemap, rd, 7.416f).rgb * transmittance * accum;
-    vec4 newCol = imageLoad(imgOutput, index) * (1.f - invItr) + vec4(incoming, 1.f) * invItr;
+    vec4 newCol = lastImgVal * (1.f - invItr) + vec4(incoming, 1.f) * invItr;
+
+    float add = lastImgVal.a < 0.f ? 1.f : 0.f;
+    newCol.a = abs(lastImgVal.a) + add;
 
     imageStore(imgOutput, index, newCol);
 }
