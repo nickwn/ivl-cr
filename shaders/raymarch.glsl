@@ -8,7 +8,7 @@ layout(binding = 1) uniform sampler3D rawVolume; // TODO: remove
 layout(binding = 2) uniform sampler1D transferLUT;
 //layout(binding = 3) uniform sampler1D opacityLUT;
 layout(binding = 3) uniform sampler3D sigmaVolume;
-layout(binding = 4) uniform samplerCube irrCubemap;
+layout(binding = 4) uniform samplerCube cubemap;
 layout(rgba16f, binding = 5) uniform image2D rayPosTex;
 layout(rgba16f, binding = 6) uniform image2D accumTex;
 layout(binding = 7) uniform sampler1D clearcoatLUT; // TODO: replace with cubic function?
@@ -53,7 +53,7 @@ vec3 calcGradient(vec3 tuv)
 }
 
 const float farT = 5.0; // hehe
-const float stepSize = 0.002;
+const float stepSize = 0.001;
 const float densityScale = 0.01;
 const float lightingMult = 1.0;
 
@@ -74,17 +74,14 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 ps, out
             break;
         }
 
-        //density = texture(rawVolume, rel).r;
-        //opacity = texture(opacityLUT, density).r;
-
-        float sigmaT = texture(sigmaVolume, rel).r;
+        float sigmaT = textureLod(sigmaVolume, rel, 0).a;
 
         sum += sigmaT * stepSize;
         isect.x += stepSize;
     }
 
     density = texture(rawVolume, rel).r;
-    opacity = texture(sigmaVolume, rel).r / density;
+    opacity = textureLod(sigmaVolume, rel, 0).a / density;
 }
 
 void main()
@@ -117,7 +114,7 @@ void main()
     // early out if no bb hit
     if (isect.x >= isect.y)
     {
-        vec3 missCol = texture(irrCubemap, rd).rgb * accum * lightingMult;
+        vec3 missCol = texture(cubemap, rd).rgb * accum * lightingMult;
         imageStore(imgOutput, index, vec4(missCol, 1.0));
         imageStore(accumTex, index, vec4(0.f));
         return;
@@ -133,7 +130,7 @@ void main()
     trace(ro, rd, isect, hit, ps, rel, density, opacity);
 
     vec4 invItr = vec4(1.0 / float(itrs));
-    vec3 missCol = texture(irrCubemap, rd).rgb * (1 - hit) * accum * lightingMult;
+    vec3 missCol = texture(cubemap, rd).rgb * (1 - hit) * accum * lightingMult;
     vec4 newCol = imageLoad(imgOutput, index);
 
     // mix if ray was computed as mix (imgOutput.a == 0)
@@ -153,7 +150,7 @@ void main()
         return;
     }
 
-    vec3 col = texture(transferLUT, density).rgb;
+    vec3 col = textureLod(sigmaVolume, rel, 0).rgb;
 
     // shade with brdf or phase function (but rn just brdf)
     vec2 uv = noise2();
@@ -167,7 +164,7 @@ void main()
     {
         const float alpha = 0.9;
         vec3 n = normalize(grad), wm = vec3(0.f);
-        if (noise() <= .5f)
+        if (false && noise() <= .5f) // disabled for now
         {
             wi.xyz = SampleDisneyClearcoat(wo, n, wm, alpha);
             wiDotN = dot(wi.xyz, n);
@@ -179,11 +176,11 @@ void main()
         }
 
         // TODO: find out where these stupid rare nans are coming from
-        float d, absDotNL, pClearcoat = texture(clearcoatLUT, density).r;
-        f = vec3(EvaluateDisneyClearcoat(pClearcoat, alpha, wo, wm, wi.xyz, n, d));
-        pct = f * wiDotN;
-        pdf = clearcoatPDF(d, dot(wo, wm));
-        thpt += pdf == 0.0 || isnan(pdf) || any(isnan(pct)) ? vec3(0.0) : pct / pdf;
+        //float d, absDotNL, pClearcoat = texture(clearcoatLUT, density).r;
+        //f = vec3(EvaluateDisneyClearcoat(pClearcoat, alpha, wo, wm, wi.xyz, n, d));
+        //pct = f * wiDotN;
+        //pdf = clearcoatPDF(d, dot(wo, wm));
+        //thpt += pdf == 0.0 || isnan(pdf) || any(isnan(pct)) ? vec3(0.0) : pct / pdf;
 
         f = lambertian(col);
         pdf = lambertianPDF(wiDotN);
@@ -205,7 +202,7 @@ void main()
         accum = vec3(0.f);
     }
     
-    imageStore(imgOutput, index, newCol);
+    //imageStore(imgOutput, index, newCol);
 
     // vec3 thpt = pct / pdf;
     rayPosPk.xyz = ps;

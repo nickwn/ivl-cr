@@ -71,5 +71,6 @@
     <None Include="shaders\raymarch_ris.glsl" />
     <None Include="shaders\raymarch.glsl" />
     <None Include="shaders\denoise.glsl" />
+    <None Include="shaders\raymarch_direct.glsl" />
   </ItemGroup>
 </Project>

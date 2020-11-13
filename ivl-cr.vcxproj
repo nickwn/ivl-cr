@@ -178,6 +178,7 @@
     <None Include="shaders\materials.glsl" />
     <None Include="shaders\precompute.glsl" />
     <None Include="shaders\raymarch.glsl" />
+    <None Include="shaders\raymarch_direct.glsl" />
     <None Include="shaders\raymarch_ris.glsl" />
     <None Include="shaders\resample.glsl" />
   </ItemGroup>

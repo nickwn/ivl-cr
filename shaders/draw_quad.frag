@@ -23,4 +23,5 @@ void main(void)
 	}
 	col3 /= samples;
 	color = vec4(ACESFilm(col3), 1.0);
+	//color = vec4(col3, 1.0);
 }

@@ -2,12 +2,15 @@
 
 #include <algorithm>
 
+#include <glm/gtx/component_wise.hpp>
+
 RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::shared_ptr<Dicom> dicom)
 	: mRaytraceProgram("shaders/raymarch.glsl", { "numSamples", "scaleFactor", "lowerBound", "view", "itrs", "depth" })
 	, mGenRaysProgram("shaders/gen_rays.glsl", { "numSamples", "view", "itrs" })
 	, mResampleProgram("shaders/resample.glsl", { "numSamples" })
 	, mDenoiseProgram("shaders/denoise.glsl", {})
 	, mPrecomputeProgram("shaders/precompute.glsl", {})
+	, mConeTraceProgram("shaders/raymarch_direct.glsl", { "numSamples", "scaleFactor", "lowerBound", "itrs" })
 	, mSize(size)
 	, mNumSamples(samples)
 	, mDicom(dicom)
@@ -44,21 +47,27 @@ RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::
 	mLowerBound = glm::vec3(0.f);
 	mScaleFactor = glm::vec3(0.f);
 
+	glm::ivec3 dicomDim = mDicom.lock()->GetScanSize();
+	GLint lodLevels = 1 + std::floor(std::log2(glm::compMax(dicomDim)));
+
 	glActiveTexture(GL_TEXTURE4);
 	glBindTexture(GL_TEXTURE_3D, mBakedVolumeTexture.Get());
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_R16, dicom->GetScanSize().x, dicom->GetScanSize().y, dicom->GetScanSize().z, 0, GL_RED, GL_UNSIGNED_SHORT, nullptr);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA16, dicom->GetScanSize().x, dicom->GetScanSize().y, dicom->GetScanSize().z, 0, GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+	glGenerateTextureMipmap(mBakedVolumeTexture.Get()); // For some reason I have to do this twice or there is a crash later
 
 	glBindImageTexture(1, dicom->GetTexture().Get(), 0, GL_FALSE, 0, GL_READ_ONLY, GL_R16);
-	glBindImageTexture(4, mBakedVolumeTexture.Get(), 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R16);
+	glBindImageTexture(4, mBakedVolumeTexture.Get(), 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16);
 	mPrecomputeProgram.Use();
 	mPrecomputeProgram.Execute(dicom->GetScanSize().x / 8, dicom->GetScanSize().y / 8, dicom->GetScanSize().z / 8);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+
+	glGenerateTextureMipmap(mBakedVolumeTexture.Get());
 
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_3D, dicom->GetTexture().Get());
@@ -96,12 +105,19 @@ void RaytracePass::Execute(bool resample)
 	mRaytraceProgram.UpdateUniform("depth", GLuint(1));
 	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
 	
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+	mConeTraceProgram.Use();
+	mConeTraceProgram.UpdateUniform("numSamples", GLuint(mNumSamples));
+	mConeTraceProgram.UpdateUniform("scaleFactor", mScaleFactor);
+	mConeTraceProgram.UpdateUniform("lowerBound", mLowerBound);
+	mConeTraceProgram.UpdateUniform("itrs", mItrs);
+	mConeTraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+	
+	/*glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 
 	mRaytraceProgram.UpdateUniform("depth", GLuint(2));
-	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);*/
 
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+	/*glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 
 	mRaytraceProgram.UpdateUniform("depth", GLuint(3));
 	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
@@ -114,7 +130,7 @@ void RaytracePass::Execute(bool resample)
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 
 	mRaytraceProgram.UpdateUniform("depth", GLuint(5));
-	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);*/
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 	

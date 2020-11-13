@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <variant>
+#include <chrono>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -241,6 +242,24 @@ struct ImageWriter
 	}
 };
 
+void GLAPIENTRY MessageCallback(GLenum source,
+	GLenum type,
+	GLuint id,
+	GLenum severity,
+	GLsizei length,
+	const GLchar* message,
+	const void* userParam)
+{
+	fprintf(stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+		(type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+		type, severity, message);
+
+	if (type == GL_DEBUG_TYPE_ERROR)
+	{
+		__debugbreak();
+	}
+}
+
 int main(int argc, char* argv[])
 {
 	static const std::string configsDir = "configs/";
@@ -263,7 +282,12 @@ int main(int argc, char* argv[])
 
 	// Creating window also intializes OpenGL context
 	glm::ivec2 size = glm::ivec2(1920, 1080);
+	//glm::ivec2 size = glm::ivec2(3840, 2160);
 	std::shared_ptr<Window> win = std::make_shared<Window>(size, "Cinematic Renderer");
+
+	// During init, enable debug output
+	glEnable(GL_DEBUG_OUTPUT);
+	glDebugMessageCallback(MessageCallback, 0);
 
 	// Volume matrix
 	YAML::Node volumeNode = config["volume"];
@@ -363,7 +387,7 @@ int main(int argc, char* argv[])
 	glActiveTexture(GL_TEXTURE1);
 	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(scanFolder);
 
-	const uint32_t numSamples = 1;
+	const uint32_t numSamples = 8;
 	RaytracePass raytracePass(size, numSamples, dicom);
 
 	glActiveTexture(GL_TEXTURE4);
@@ -374,6 +398,7 @@ int main(int argc, char* argv[])
 	ImageWriter imageWriter = ImageWriter(scanFolder);
 	bool imageWritten = false;
 	int requiredItrs = config["itrs"].as<int>();
+	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 	while (!win->ShouldClose())
 	{
 		if (viewController->GetIsViewDirtied())
@@ -381,8 +406,10 @@ int main(int argc, char* argv[])
 			raytracePass.SetItrs(1);
 		}
 
-		if (requiredItrs != 0 &&    raytracePass.GetItrs() == requiredItrs && !imageWritten)
+		if (requiredItrs != 0 && raytracePass.GetItrs() == requiredItrs && !imageWritten)
 		{
+			std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+			std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
 			imageWriter.WriteImage(win.get());
 			imageWritten = true;
 		}

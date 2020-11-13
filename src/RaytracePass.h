@@ -29,6 +29,7 @@ private:
 	ComputeProgram mResampleProgram;
 	ComputeProgram mDenoiseProgram;
 	ComputeProgram mPrecomputeProgram;
+	ComputeProgram mConeTraceProgram;
 	glm::ivec2 mSize;
 	uint32_t mNumSamples;
 	std::weak_ptr<Dicom> mDicom;

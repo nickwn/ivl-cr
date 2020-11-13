@@ -13,7 +13,7 @@ render mode: Texture-based
 transfer function:
   contrast: [0.3, 0.5]
   opacity:
-  - [1.0, 0.0, 2.0, 0.0, 1.0]
+  - [1.0, 0.0, 1.0, 0.0, 1.0]
   gradient: [[0.8, 0.0, 0.0], [1.0, 0.8, 0.0]]
   color scheme: RGB-gradient
 cutting plane:
@@ -36,4 +36,4 @@ mask:
   center line: false
   value: [false, false, false, true, false, false, false, false]
 cubemap: studio1
-itrs: 100
+itrs: 0
