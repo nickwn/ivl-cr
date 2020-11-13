@@ -281,8 +281,8 @@ int main(int argc, char* argv[])
 	YAML::Node config = YAML::LoadFile(configFilename);
 
 	// Creating window also intializes OpenGL context
-	glm::ivec2 size = glm::ivec2(1920, 1080);
-	//glm::ivec2 size = glm::ivec2(3840, 2160);
+	//glm::ivec2 size = glm::ivec2(1920, 1080);
+	glm::ivec2 size = glm::ivec2(3840, 2160);
 	std::shared_ptr<Window> win = std::make_shared<Window>(size, "Cinematic Renderer");
 
 	// During init, enable debug output
@@ -387,7 +387,7 @@ int main(int argc, char* argv[])
 	glActiveTexture(GL_TEXTURE1);
 	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(scanFolder);
 
-	const uint32_t numSamples = 4;
+	const uint32_t numSamples = 2;
 	RaytracePass raytracePass(size, numSamples, dicom);
 
 	glActiveTexture(GL_TEXTURE4);

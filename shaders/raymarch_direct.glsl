@@ -72,7 +72,7 @@ void main()
     if (length(accum) < 0.0001) return;
 
     // TODO: seed better
-    initRNG(index, itrs * numSamples + sampleNum);
+    initRNG(index, itrs);
 
     vec4 rayPosPk = imageLoad(rayPosTex, index);
 

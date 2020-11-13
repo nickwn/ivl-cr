@@ -36,4 +36,4 @@ mask:
   center line: false
   value: [false, false, false, true, false, false, false, false]
 cubemap: studio1
-itrs: 0
+itrs: 1000

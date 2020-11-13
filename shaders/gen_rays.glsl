@@ -9,8 +9,8 @@ uniform uint numSamples;
 uniform mat4 view;
 uniform int itrs;
 
-const vec2 screenRes = vec2(1920.0, 1080.0); // todo: make uniform
-//const vec2 screenRes = vec2(3840.0, 2160.0);
+//const vec2 screenRes = vec2(1920.0, 1080.0); // todo: make uniform
+const vec2 screenRes = vec2(3840.0, 2160.0);
 const vec2 halfRes = screenRes * 0.5;
 const float z = 1.0 / tan(radians(45.0) * 0.5);
 
