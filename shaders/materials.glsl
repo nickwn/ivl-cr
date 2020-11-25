@@ -20,27 +20,26 @@ float lambertianPDF(float wiDotN)
     return invPi * wiDotN;
 }
 
-vec3 sampleLambertian(vec3 n)
+vec3 sampleLambertian(vec3 n, vec2 uv)
 {
     vec3 b1, b2;
     ONB(n, b1, b2);
 
-    /*float r = sqrt(uv.x);
+    float r = sqrt(uv.x);
     float theta = 2 * pi * uv.y;
 
     float x = r * cos(theta);
     float y = r * sin(theta);
 
-    vec3 s = vec3(x, y, sqrt(max(0.0, 1 - uv.x)));*/
+    vec3 s = vec3(x, y, sqrt(max(0.0, 1 - uv.x)));
     
-    vec2 uv = noise2();
-    float theta = acos(sqrt(uv.x));
+    /*float theta = acos(sqrt(uv.x));
     float phi = twoPi * uv.y;
     vec3 s = vec3(
         cos(phi) * sin(theta),
         sin(phi) * sin(theta),
         cos(theta)
-    );
+    );*/
     return normalize(s.x * b1 + s.y * b2 + s.z * n);
 }
 
@@ -100,12 +99,12 @@ float clearcoatPDF(float d, float absDotMV)
     return d / (4.0 * absDotMV);
 }
 
-vec3 SampleDisneyClearcoat(vec3 wo, vec3 n, out vec3 wm, float alpha)
+vec3 SampleDisneyClearcoat(vec3 wo, vec3 n, out vec3 wm, float alpha, vec2 uv)
 {
     float a2 = alpha * alpha;
 
-    float r0 = noise();
-    float r1 = noise();
+    float r0 = uv.x;
+    float r1 =uv.y;
     float cosTheta = sqrt(max(0.0, (1.0 - pow(a2, 1.0 - r0)) / (1.0 - a2)));
     float sinTheta = sqrt(max(0.0, 1.0 - cosTheta * cosTheta));
     float phi = twoPi * r1;

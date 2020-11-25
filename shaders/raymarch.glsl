@@ -4,16 +4,16 @@
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f, binding = 0) uniform image2D imgOutput;
-layout(binding = 1) uniform sampler3D rawVolume; // TODO: remove
+layout(r16, binding = 1) uniform image3D rawVolume;
 layout(binding = 2) uniform sampler1D transferLUT;
-//layout(binding = 3) uniform sampler1D opacityLUT;
-layout(binding = 3) uniform sampler3D sigmaVolume;
+layout(rgba16, binding = 3) uniform image3D sigmaVolume;
 layout(binding = 4) uniform samplerCube cubemap;
 layout(rgba16f, binding = 5) uniform image2D rayPosTex;
 layout(rgba16f, binding = 6) uniform image2D accumTex;
 layout(binding = 7) uniform sampler1D clearcoatLUT; // TODO: replace with cubic function?
 uniform uint numSamples;
 uniform vec3 scaleFactor;
+uniform vec3 scanSize;
 uniform vec3 lowerBound;
 uniform mat4 view;
 uniform int itrs;
@@ -29,27 +29,21 @@ vec2 rayBox(vec3 ro, vec3 rd, vec3 mn, vec3 mx) {
     return vec2(max(max(tmin.x, tmin.y), tmin.z), min(min(tmax.x, tmax.y), tmax.z));
 }
 
-vec3 calcGradient(vec3 tuv)
+vec3 calcGradient(ivec3 tuv)
 {
     vec3 highVals = vec3(
-        textureOffset(rawVolume, tuv, ivec3(1, 0, 0)).r,
-        textureOffset(rawVolume, tuv, ivec3(0, 1, 0)).r,
-        textureOffset(rawVolume, tuv, ivec3(0, 0, 1)).r
+        imageLoad(rawVolume, tuv + ivec3(1, 0, 0)).r,
+        imageLoad(rawVolume, tuv + ivec3(0, 1, 0)).r,
+        imageLoad(rawVolume, tuv + ivec3(0, 0, 1)).r
     );
 
     vec3 lowVals = vec3(
-        textureOffset(rawVolume, tuv, ivec3(-1, 0, 0)).r,
-        textureOffset(rawVolume, tuv, ivec3(0, -1, 0)).r,
-        textureOffset(rawVolume, tuv, ivec3(0, 0, -1)).r
+        imageLoad(rawVolume, tuv + ivec3(-1, 0, 0)).r,
+        imageLoad(rawVolume, tuv + ivec3(0, -1, 0)).r,
+        imageLoad(rawVolume, tuv + ivec3(0, 0, -1)).r
     );
 
-    /*return -vec3(
-        texture(opacityLUT, highVals.x).r - texture(opacityLUT, lowVals.x).r,
-        texture(opacityLUT, highVals.y).r - texture(opacityLUT, lowVals.y).r,
-        texture(opacityLUT, highVals.z).r - texture(opacityLUT, lowVals.z).r
-    );*/
-
-    return -vec3(highVals.x - lowVals.x, highVals.y - lowVals.y, highVals.z - lowVals.z);
+    return -highVals + lowVals;
 }
 
 const float farT = 5.0; // hehe
@@ -57,31 +51,33 @@ const float stepSize = 0.001;
 const float densityScale = 0.01;
 const float lightingMult = 1.0;
 
-void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 ps, out vec3 rel, out float density, out float opacity)
+void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 uvw, out ivec3 idx)
 {
-    float s = -log(noise()) * densityScale;
-    float sum = 0.0f;
-    isect.x = noise() * stepSize;
-    hit = 1;
-    while (sum < s)
-    {
-        ps = ro + isect.x * rd;
-        rel = (ps - lowerBound) * scaleFactor;
+    float s = -log(rand()) * densityScale;
+    isect.x = rand() * stepSize;
 
+    // compute ray in index space
+    ro = (ro - lowerBound) * scaleFactor;
+    rd *= scaleFactor;
+
+    hit = 1;
+    while (s > 0.f)
+    {
+        uvw = ro + isect.x * rd;
+        idx = ivec3(uvw * scanSize);
         if (isect.x >= isect.y)
         {
             hit = 0;
             break;
         }
 
-        float sigmaT = textureLod(sigmaVolume, rel, 0).a;
+        float sigmaT = imageLoad(sigmaVolume, idx).a;
 
-        sum += sigmaT * stepSize;
+        s -= sigmaT * stepSize;
         isect.x += stepSize;
     }
 
-    density = texture(rawVolume, rel).r;
-    opacity = textureLod(sigmaVolume, rel, 0).a / density;
+    uvw = (uvw / scaleFactor) + lowerBound;
 }
 
 void main()
@@ -115,7 +111,7 @@ void main()
     // early out if no bb hit
     if (isect.x >= isect.y)
     {
-        vec3 missCol = texture(cubemap, rd).rgb * accum * lightingMult;
+        vec3 missCol = texture(cubemap, rd).rgb * lightingMult;
         imageStore(imgOutput, index, vec4(missCol, 1.0));
         imageStore(accumTex, index, vec4(0.f));
         return;
@@ -126,9 +122,12 @@ void main()
     isect.y -= isect.x;
 
     uint hit = 1;
-    vec3 ps = vec3(0.0), rel = vec3(0.0);
-    float density = 0.0, opacity = 0.0;
-    trace(ro, rd, isect, hit, ps, rel, density, opacity);
+    vec3 uvw = vec3(0.0);
+    ivec3 idx = ivec3(0);
+    trace(ro, rd, isect, hit, uvw, idx);
+
+    float density = imageLoad(rawVolume, idx).r;
+    float opacity = imageLoad(sigmaVolume, idx).a / density;
 
     vec4 lastImgVal = imageLoad(imgOutput, index);
     if (hit == 0)
@@ -143,34 +142,35 @@ void main()
         return;
     }
 
-    vec3 col = textureLod(sigmaVolume, rel, 0).rgb;
+    vec3 col = imageLoad(sigmaVolume, idx).rgb;
 
     // shade with brdf or phase function (but rn just brdf)
-    vec3 wo = -rd, grad = calcGradient(rel), pct = vec3(0.0), f = vec3(0.0), thpt = vec3(0.f);
+    vec2 uv = rand2(); // halton sample for importance sampling
+    vec3 wo = -rd, grad = calcGradient(idx), pct = vec3(0.0), f = vec3(0.0), thpt = vec3(0.f);
     float pbrdf = pBRDF(opacity, length(grad), 1.0), pdf = 0.f, wiDotN = 1.f;
     bool goodSample = true;
 
     // reservoir state
     vec4 wi = vec4(0.0); // y
-    if (noise() < pbrdf)
+    if (rand() < pbrdf)
     {
-        const float alpha = 0.9;
+        const float alpha = 0.9, pClearcoat = texture(clearcoatLUT, density).r;
         vec3 n = normalize(grad), wm = vec3(0.f);
-        if (noise() < .5f)
+        if (rand() < .5f)
         {
-            wi.xyz = SampleDisneyClearcoat(wo, n, wm, alpha);
+            wi.xyz = SampleDisneyClearcoat(wo, n, wm, alpha, uv);
             wiDotN = dot(wi.xyz, n);
             wi.w = 1.f;
         }
         else
         {
-            wi.xyz = sampleLambertian(n);
+            wi.xyz = sampleLambertian(n, uv);
             wiDotN = dot(wi.xyz, n);
             wi.w = -1.f;
         }
 
         // TODO: find out where these stupid rare nans are coming from
-        float d, absDotNL, pClearcoat = texture(clearcoatLUT, density).r;
+        float d, absDotNL;
         f = vec3(EvaluateDisneyClearcoat(pClearcoat, alpha, wo, wm, wi.xyz, n, d));
         pct = f * wiDotN;
         pdf = clearcoatPDF(d, dot(wo, wm));
@@ -183,7 +183,7 @@ void main()
     }
     else
     {
-        wi.xyz = sampleSchlickPhase(wo, noise2());
+        wi.xyz = sampleSchlickPhase(wo, uv);
         f = schlickPhase(col, wi.xyz, wo, 0.0, pdf);
         pct = f;
         wi.w = -1.f;
@@ -198,7 +198,7 @@ void main()
     
     imageStore(imgOutput, index, vec4(lastImgVal.rgb, lastImgVal.a * wi.w));
 
-    rayPosPk.xyz = ps;
+    rayPosPk.xyz = uvw;
     rayPosPk.w = acos(wi.z);
     imageStore(rayPosTex, index, rayPosPk);
 

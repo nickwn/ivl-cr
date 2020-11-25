@@ -1,13 +1,13 @@
 ﻿
 #version 430
+#extension GL_ARB_shader_group_vote : require
+#extension GL_ARB_shader_ballot : require
+#extension GL_NV_shader_thread_shuffle : require // for shuffleXorNV
+
 #pragma include("common.glsl")
-#pragma include("materials.glsl")
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f, binding = 0) uniform image2D imgOutput;
-//layout(binding = 1) uniform sampler3D rawVolume; // TODO: remove
-//layout(binding = 2) uniform sampler1D transferLUT;
-//layout(binding = 2) uniform samplerCube irrCubemap; // replacing transferLUT
 layout(binding = 3) uniform sampler3D sigmaVolume;
 layout(binding = 4) uniform samplerCube irrCubemap;
 layout(rgba16f, binding = 5) uniform image2D rayPosTex;
@@ -33,29 +33,74 @@ const float stepSize = 0.001;
 const float densityScale = 0.01;
 const float lightingMult = 1.0;
 
-void trace(in vec3 ro, in vec3 rd, in vec2 isect, bool diffuse, out vec3 transmittance)
+void trace(in vec3 ro, in vec3 rd, in vec2 isect, in float diffuse, out vec3 transmittance)
 {
     const float coneSpread = 0.325f;
     const float voxelSize = stepSize; // ??
     const float mipmapHardcap = 5.4f;
 
-    isect.x = noise() * stepSize;
-    float multiplier = diffuse ? coneSpread / voxelSize : 0.f;
-    float additive = diffuse ? 0.f : stepSize;
-    vec3 linearDensity = vec3(0.0f);
-    while (isect.x < isect.y)
-    {
-        vec3 ps = ro + isect.x * rd;
-        vec3 rel = (ps - lowerBound) * scaleFactor;
+    isect.x = rand() * stepSize;
 
-        float l = additive + multiplier * isect.x;
+    // compute ray in index space
+    ro = (ro - lowerBound) * scaleFactor;
+    rd *= scaleFactor;
+
+    const uint startActive = uint(ballotARB(true));
+    const uint clearcoatThreads = uint(ballotARB(diffuse < .5f));
+
+    float multiplier = diffuse * (coneSpread / voxelSize), stepMultiplier = 2.f;
+    vec3 linearDensity = vec3(0.0f);
+    uint needsHelp = 1, finished = 0;
+    bool imDone = false;
+    while (finished != startActive) // 117
+    {
+        if (!imDone && isect.x > isect.y)
+        {
+            imDone = true;
+            multiplier = 0.f;
+        }
+
+        uint getsHelp = findLSB(needsHelp);
+        bool gettingHelp = (getsHelp == gl_SubGroupInvocationARB);
+        float numHelpers = float(bitCount(finished));
+        if (imDone)
+        {
+            isect = readInvocationARB(isect, getsHelp);
+            ro = readInvocationARB(ro, getsHelp);
+            rd = readInvocationARB(rd, getsHelp);
+
+            const float offset = float(bitCount(uint(finished & gl_SubGroupLeMaskARB)));
+            ro += rd * offset * stepSize;
+        }
+
+        vec3 ps = ro + isect.x * rd;
+        vec3 rel = ps;
+        float l = multiplier * isect.x + stepSize;
         float level = log2(l);
 
         vec4 bakedVal = textureLod(sigmaVolume, rel, min(mipmapHardcap, level));
         vec3 sigmaT = vec3(pow(bakedVal.a, 1.5) * l) * (vec3(1.f) - bakedVal.rgb);
         
-        linearDensity += sigmaT;
-        isect.x += l * 2.f;
+        vec3 helperSigmaT = sigmaT * (imDone ? 1.f : 0.f);
+        if (!imDone)
+        {
+            if (gettingHelp)
+            {
+                helperSigmaT = helperSigmaT + shuffleXorNV(helperSigmaT, 16, 32);
+                helperSigmaT = helperSigmaT + shuffleXorNV(helperSigmaT, 8, 32);
+                helperSigmaT = helperSigmaT + shuffleXorNV(helperSigmaT, 4, 32);
+                helperSigmaT = helperSigmaT + shuffleXorNV(helperSigmaT, 2, 32);
+                helperSigmaT = helperSigmaT + shuffleXorNV(helperSigmaT, 1, 32);
+                linearDensity += helperSigmaT;
+                isect.x += numHelpers * l;
+            }
+
+            linearDensity += sigmaT;
+            isect.x += l * stepMultiplier;
+        }
+
+        finished = uint(ballotARB(imDone));
+        needsHelp = clearcoatThreads & ~finished;
     }
     transmittance = exp(vec3(-linearDensity * 10.f));
 }
@@ -69,6 +114,7 @@ void main()
 
     vec4 accumPk = imageLoad(accumTex, index);
     vec3 accum = accumPk.rgb;
+
     if (length(accum) < 0.0001) return;
 
     // TODO: seed better
@@ -87,12 +133,6 @@ void main()
     isect.x = max(0, isect.x);
     isect.y = min(isect.y, farT);
 
-    // early out if no bb hit (shouldn't happen)
-    if (isect.x >= isect.y)
-    {
-        return;
-    }
-
     // init tracing from camera
     ro += rd * isect.x;
     isect.y -= isect.x;
@@ -100,7 +140,8 @@ void main()
     vec4 lastImgVal = imageLoad(imgOutput, index);
 
     vec3 transmittance;
-    trace(ro, rd, isect, lastImgVal.a < 0.f, transmittance);
+    float diffuse = (-1.f * sign(lastImgVal.a) + 1.f) * .5f;
+    trace(ro, rd, isect, diffuse, transmittance);
 
     vec4 invItr = vec4(1.f / abs(lastImgVal.a));
     vec3 incoming = textureLod(irrCubemap, rd, 7.416f).rgb * transmittance * accum;

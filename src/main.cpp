@@ -281,8 +281,8 @@ int main(int argc, char* argv[])
 	YAML::Node config = YAML::LoadFile(configFilename);
 
 	// Creating window also intializes OpenGL context
-	//glm::ivec2 size = glm::ivec2(1920, 1080);
-	glm::ivec2 size = glm::ivec2(3840, 2160);
+	glm::ivec2 size = glm::ivec2(1920, 1080);
+	//glm::ivec2 size = glm::ivec2(3840, 2160);
 	std::shared_ptr<Window> win = std::make_shared<Window>(size, "Cinematic Renderer");
 
 	// During init, enable debug output
@@ -365,9 +365,9 @@ int main(int argc, char* argv[])
 	using ClearcoatPF = PLF<float, float>;
 	ClearcoatPF clearcoatPF;
 	clearcoatPF.AddStop(0.0f, 0.0f);
-	clearcoatPF.AddStop(0.6f, 0.0f);
-	clearcoatPF.AddStop(0.7f, 0.99f);
-	clearcoatPF.AddStop(1.0f, 0.99f);
+	clearcoatPF.AddStop(.65f, 0.0f);
+	clearcoatPF.AddStop(0.7f, 0.7f);
+	clearcoatPF.AddStop(1.0f, 0.7f);
 	glActiveTexture(GL_TEXTURE7);
 	clearcoatPF.EvaluateTexture(100);
 
@@ -387,7 +387,7 @@ int main(int argc, char* argv[])
 	glActiveTexture(GL_TEXTURE1);
 	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(scanFolder);
 
-	const uint32_t numSamples = 2;
+	const uint32_t numSamples = 4;
 	RaytracePass raytracePass(size, numSamples, dicom);
 
 	glActiveTexture(GL_TEXTURE4);

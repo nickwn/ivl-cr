@@ -26,7 +26,6 @@ public:
 private:
 	ComputeProgram mRaytraceProgram;
 	ComputeProgram mGenRaysProgram;
-	ComputeProgram mResampleProgram;
 	ComputeProgram mDenoiseProgram;
 	ComputeProgram mPrecomputeProgram;
 	ComputeProgram mConeTraceProgram;

@@ -38,38 +38,9 @@ uint nextUInt() {
     return result;
 }
 
-void jump() 
-{
-    const uint JUMP[] = { 0xb523952e, 0x0b6f099f, 0xccf5a0ef, 0x1c580662 };
-
-    uint s0 = 0;
-    uint s1 = 0;
-    uint s2 = 0;
-    uint s3 = 0;
-    for (int i = 0; i < 4; i++)
-    {
-        for (int b = 0; b < 32; b++) 
-        {
-            if ((JUMP[i] & (1u << b)) != 0) 
-            {
-                s0 ^= state[0];
-                s1 ^= state[1];
-                s2 ^= state[2];
-                s3 ^= state[3];
-            }
-            nextUInt();
-        }
-    }
-
-    state[0] = s0;
-    state[1] = s1;
-    state[2] = s2;
-    state[3] = s3;
-}
-
 void initRNG(ivec2 index, uint itrs)
 {
-    uint rand = floatBitsToUint(fract(sin(dot(vec2(index), vec2(12.9898,78.233)))*43758.5453123));
+    uint rand = floatBitsToUint(fract(sin(dot(vec2(index), vec2(12.9898, 78.233))) * 43758.5453123));
     uint seed1 = hash(index.x) ^ rand;
     uint seed2 = hash(index.y) ^ rand;
     uint seed3 = hash(itrs);
@@ -78,11 +49,10 @@ void initRNG(ivec2 index, uint itrs)
     state[2] = index.x ^ seed2;
     state[3] = index.y ^ seed1;
     nextUInt(); nextUInt();
-    //jump();
 }
 
 // from https://github.com/wjakob/pcg32/blob/master/pcg32.h
-float noise()
+float rand()
 {
     /* Trick from MTGP: generate an uniformly distributed
            single precision number in [1,2) and subtract 1. */
@@ -90,8 +60,8 @@ float noise()
     return uintBitsToFloat(u) - 1.0f;
 }
 
-// shitty 2d noise func
-vec2 noise2()
+// shitty 2d rand func
+vec2 rand2()
 {
-    return vec2(noise(), noise());
+    return vec2(rand(), rand());
 }
