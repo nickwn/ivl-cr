@@ -12,6 +12,7 @@ class Dicom
 public:
 	Dicom(std::string folder);
 	const UniqueTexture& GetTexture() const { return mUniqueTexture; }
+	UniqueTexture& GetTexture() { return mUniqueTexture; }
 	const glm::ivec3& GetScanSize() const { return mDim; }
 	const glm::vec3& GetPhysicalSize() const { return mPhysicalSize; }
 

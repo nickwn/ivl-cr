@@ -14,7 +14,7 @@ class RaytracePass
 public:
 	RaytracePass(const glm::ivec2& size, const uint32_t samples, std::shared_ptr<Dicom> dicom);
 
-	void Execute(bool resample);
+	void Execute();
 
 	const UniqueTexture& GetColorTexture() { return mColorTexture; }
 
@@ -38,7 +38,6 @@ private:
 	UniqueTexture mPosTexture;
 	UniqueTexture mAccumTexture;
 	UniqueTexture mColorTexture;
-	//UniqueTexture mReservoirTexture;
 	UniqueTexture mDenoiseTexture;
 	UniqueTexture mBakedVolumeTexture;
 

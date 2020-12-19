@@ -13,6 +13,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/gtx/transform.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 #include <yaml-cpp/yaml.h>
 
@@ -27,11 +28,13 @@
 #include "PiecewiseFunction.h"
 #include "GLObjects.h"
 
-// Injecting a conversion template specialization for glm vec4s for YAML parsing
+// Injecting a conversion template specialization for glm stuffs for YAML parsing
 namespace YAML {
 	template<>
-	struct convert<glm::vec3> {
-		static Node encode(const glm::vec3& rhs) {
+	struct convert<glm::vec3> 
+	{
+		static Node encode(const glm::vec3& rhs) 
+		{
 			Node node;
 			node.push_back(rhs.x);
 			node.push_back(rhs.y);
@@ -39,8 +42,10 @@ namespace YAML {
 			return node;
 		}
 
-		static bool decode(const Node& node, glm::vec3& rhs) {
-			if (!node.IsSequence() || node.size() != 3) {
+		static bool decode(const Node& node, glm::vec3& rhs) 
+		{
+			if (!node.IsSequence() || node.size() != 3) 
+			{
 				return false;
 			}
 
@@ -52,9 +57,11 @@ namespace YAML {
 	};
 
 	template<>
-	struct convert<glm::mat4> {
+	struct convert<glm::mat4> 
+	{
 		static constexpr glm::length_t matSz = glm::mat4::length() * glm::mat4::length();
-		static Node encode(const glm::mat4& rhs) {
+		static Node encode(const glm::mat4& rhs) 
+		{
 			Node node;
 			for (glm::length_t i = 0; i < matSz; i++)
 			{
@@ -65,8 +72,10 @@ namespace YAML {
 			return node;
 		}
 
-		static bool decode(const Node& node, glm::mat4& rhs) {
-			if (!node.IsSequence() || node.size() != 16) {
+		static bool decode(const Node& node, glm::mat4& rhs) 
+		{
+			if (!node.IsSequence() || node.size() != 16) 
+			{
 				return false;
 			}
 
@@ -77,6 +86,34 @@ namespace YAML {
 				rhs[rowIdx][colIdx] = node[i].as<float>();
 			}
 
+			return true;
+		}
+	};
+
+	template<>
+	struct convert<glm::quat> 
+	{
+		static Node encode(const glm::quat& quat) 
+		{
+			Node node;
+			node.push_back(quat.x);
+			node.push_back(quat.y);
+			node.push_back(quat.z);
+			node.push_back(quat.w);
+			return node;
+		}
+
+		static bool decode(const Node& node, glm::quat& rhs) 
+		{
+			if (!node.IsSequence() || node.size() != 3)
+			{
+				return false;
+			}
+
+			rhs.x = node[0].as<float>();
+			rhs.y = node[1].as<float>();
+			rhs.z = node[2].as<float>();
+			rhs.w = node[3].as<float>();
 			return true;
 		}
 	};
@@ -233,8 +270,10 @@ struct ImageWriter
 
 		glm::ivec2 fbSize = window->GetFramebufferSize();
 
-		std::vector<GLubyte> pixels(3 * fbSize.x * fbSize.y);
+		std::vector<std::array<GLubyte, 3>> pixels(fbSize.x * fbSize.y); // store as std::array<GLubyte, 3> so reversing later doesn't also reverse the channels
 		glReadPixels(0, 0, fbSize.x, fbSize.y, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+
+		std::reverse(pixels.begin(), pixels.end()); // image is loaded in upside-down so...
 
 		stbi_write_png(mNextOutputImagePath.c_str(), fbSize.x, fbSize.y, 3, pixels.data(), fbSize.x * 3);
 
@@ -265,6 +304,7 @@ int main(int argc, char* argv[])
 	static const std::string configsDir = "configs/";
 	static const std::string scansDir = "scans/";
 
+	// defaults
 	std::string configFilename = configsDir + "config3.yaml";
 	std::string scanFolder = scansDir + "Larry_2017/";
 
@@ -292,21 +332,21 @@ int main(int argc, char* argv[])
 	// Volume matrix
 	YAML::Node volumeNode = config["volume"];
 	const glm::vec3 volumeTranslation = volumeNode["pos"].as<glm::vec3>();
-	const glm::vec3 volumeScale = volumeNode["scale"].as<glm::vec3>();
-	const glm::mat4 volumeRotation = volumeNode["rotation"].as<glm::mat4>();
+	const glm::vec3 volumeScale = volumeNode["scale"].as<glm::vec3>() * glm::vec3(1.f, -1.f, 1.f); // flip the volume because it is loaded in upside-down
+	const glm::mat4 volumeRotation = volumeNode["rotation"].as<glm::mat4>(
+		glm::mat4_cast(volumeNode["rotation"].as<glm::quat>(glm::quat()))
+	);
 	const glm::mat4 volumeMat = glm::translate(volumeTranslation) * glm::scale(volumeScale) * volumeRotation;
 
 	// Camera matrix
 	YAML::Node cameraNode = config["camera"];
-	const glm::mat4 cameraMat = glm::lookAt(cameraNode["pos"].as<glm::vec3>(), cameraNode["center"].as<glm::vec3>(), cameraNode["up"].as<glm::vec3>() * -1.f);
+	const glm::mat4 cameraMat = glm::lookAt(cameraNode["pos"].as<glm::vec3>(), cameraNode["center"].as<glm::vec3>(), cameraNode["up"].as<glm::vec3>() * 1.f);
 
-	//const glm::mat4 initialView = glm::translate(glm::vec3(0.f, 0.f, -3.f)); // TODO: add this to config
-	const glm::mat4 initialView = volumeMat * cameraMat; // TODO: add this to config
+	const glm::mat4 initialView = volumeMat * cameraMat;
 	std::shared_ptr<ViewController> viewController = std::make_shared<ViewController>(initialView);
 	win->AddMouseListener(viewController);
 
 	// Context is created, so now we can init textures
-
 	YAML::Node transferFunction = config["transfer function"];
 
 	YAML::Node opacityTrianglesNode = transferFunction["opacity"];
@@ -318,6 +358,12 @@ int main(int argc, char* argv[])
 	}
 
 	OpacityTransferFunction opacityTF = OpacityTransferFunction(opacityTriangles);
+	/*PLF<float, float> opacityTF = PLF<float, float>();
+	opacityTF.AddStop(0.f, 0.f);
+	opacityTF.AddStop(0.4f, 0.f);
+	//opacityTF.AddStop(0.4f, 1.f);
+	//opacityTF.AddStop(.41f, 1.f);
+	opacityTF.AddStop(1.f, 1.f);*/
 
 	glActiveTexture(GL_TEXTURE3);
 	opacityTF.EvaluateTexture(100);
@@ -361,7 +407,7 @@ int main(int argc, char* argv[])
 		rgbTF->EvaluateTexture(100);
 	}
 
-	// Clearcoat PLF
+	// hard-set clearcoat PLF
 	using ClearcoatPF = PLF<float, float>;
 	ClearcoatPF clearcoatPF;
 	clearcoatPF.AddStop(0.0f, 0.0f);
@@ -374,6 +420,7 @@ int main(int argc, char* argv[])
 	// Get cubemap file locations
 	std::string cubemapFolder = config["cubemap"].as<std::string>();
 	static constexpr std::array<const char*, 6> cubemapFilenames = { "posx.hdr", "negx.hdr", "posy.hdr", "negy.hdr", "posz.hdr", "negz.hdr" };
+	//static constexpr std::array<const char*, 6> cubemapFilenames = { "negx.bmp", "posx.bmp", "posy.bmp", "negy.bmp", "posz.bmp", "negz.bmp" };
 	std::vector<std::string> cubemapFiles;
 	for (const std::string& filename : cubemapFilenames)
 	{
@@ -387,7 +434,7 @@ int main(int argc, char* argv[])
 	glActiveTexture(GL_TEXTURE1);
 	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(scanFolder);
 
-	const uint32_t numSamples = 4;
+	const uint32_t numSamples = 8;
 	RaytracePass raytracePass(size, numSamples, dicom);
 
 	glActiveTexture(GL_TEXTURE4);
@@ -416,12 +463,8 @@ int main(int argc, char* argv[])
 
 		const glm::mat4 view = viewController->GetView();
 		raytracePass.SetView(view);
-		raytracePass.Execute(viewController->GetShouldResample());
+		raytracePass.Execute();
 
-		// make sure writing to image has finished before read
-		//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-		//glClear(GL_COLOR_BUFFER_BIT);
 		drawQuad.Execute(raytracePass.GetColorTexture());
 		glfwPollEvents();
 		win->SwapBuffers();

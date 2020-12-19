@@ -14,13 +14,14 @@ void main()
     ivec2 index = ivec2(gl_GlobalInvocationID.xy);
 
     // modified from https://alain.xyz/blog/raytracing-denoising#bluring-kernels
-    const int radius = 2; //5x5 kernel
+    const int radius = 4; //5x5 kernel
+    const int samples = 4;
     vec2 sigmaVariancePair = vec2(0.0, 0.0);
     float sampCount = 0.0;
     vec3 avgColor = vec3(0.f);
     for (int y = -radius; y <= radius; ++y)
     {
-        for (int x = -radius; x <= radius; ++x)
+        for (int x = -radius * samples; x <= radius * samples; ++x)
         {
             // We already have the center data
             if (x == 0 && y == 0) { continue; }
@@ -32,19 +33,19 @@ void main()
             // Determine the average brightness of this sample
             // Using International Telecommunications Union's ITU BT.601 encoding params
             avgColor += curColor;
-            float samp = luminance(curColor);
+            float samp = min(.7f, luminance(curColor));
             float sampSquared = samp * samp;
             sigmaVariancePair += vec2(samp, sampSquared);
 
             sampCount += 1.0;
         }
     }
-    vec3 idxColor = imageLoad(imgOutput, index).rgb;
+    vec4 idxColor = imageLoad(imgOutput, index);
     avgColor /= sampCount;
     sigmaVariancePair /= sampCount;
 
     float variance = sigmaVariancePair.y - sigmaVariancePair.x * sigmaVariancePair.x;
     float clampVariance = clamp(variance * 10.0, 0.0, 1.0);
-    vec3 mixColor = avgColor * clampVariance + idxColor * (1.0 - clampVariance);
-    imageStore(denoisedImg, index, vec4(mixColor, 1.0));
+    vec3 mixColor = avgColor * clampVariance + idxColor.rgb * (1.0 - clampVariance);
+    imageStore(denoisedImg, index, vec4(mixColor, idxColor.a));
 }

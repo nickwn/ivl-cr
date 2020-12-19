@@ -48,18 +48,12 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, in float diffuse, out vec3 tra
     const uint startActive = uint(ballotARB(true));
     const uint clearcoatThreads = uint(ballotARB(diffuse < .5f));
 
-    float multiplier = diffuse * (coneSpread / voxelSize), stepMultiplier = 2.f;
+    float multiplier = diffuse * (coneSpread / voxelSize), stepMultiplier = 1.f;
     vec3 linearDensity = vec3(0.0f);
     uint needsHelp = 1, finished = 0;
-    bool imDone = false;
-    while (finished != startActive) // 117
+    coherent volatile bool imDone = false;
+    while (finished != startActive)
     {
-        if (!imDone && isect.x > isect.y)
-        {
-            imDone = true;
-            multiplier = 0.f;
-        }
-
         uint getsHelp = findLSB(needsHelp);
         bool gettingHelp = (getsHelp == gl_SubGroupInvocationARB);
         float numHelpers = float(bitCount(finished));
@@ -75,13 +69,13 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, in float diffuse, out vec3 tra
 
         vec3 ps = ro + isect.x * rd;
         vec3 rel = ps;
-        float l = multiplier * isect.x + stepSize;
+        float l = multiplier * isect.x + stepSize * (diffuse > .5f ? 1.f : 10.f);
         float level = log2(l);
 
         vec4 bakedVal = textureLod(sigmaVolume, rel, min(mipmapHardcap, level));
-        vec3 sigmaT = vec3(pow(bakedVal.a, 1.5) * l) * (vec3(1.f) - bakedVal.rgb);
+        vec3 sigmaT = vec3(pow(bakedVal.a, 1.5f) * l) * (vec3(1.f) - bakedVal.rgb);
         
-        vec3 helperSigmaT = sigmaT * (imDone ? 1.f : 0.f);
+        vec3 helperSigmaT = vec3(imDone ? sigmaT : vec3(0.f));
         if (!imDone)
         {
             if (gettingHelp)
@@ -97,6 +91,12 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, in float diffuse, out vec3 tra
 
             linearDensity += sigmaT;
             isect.x += l * stepMultiplier;
+        }
+
+        if (!imDone && isect.x > isect.y)
+        {
+            imDone = true;
+            multiplier = 0.f;
         }
 
         finished = uint(ballotARB(imDone));
@@ -144,7 +144,9 @@ void main()
     trace(ro, rd, isect, diffuse, transmittance);
 
     vec4 invItr = vec4(1.f / abs(lastImgVal.a));
-    vec3 incoming = textureLod(irrCubemap, rd, 7.416f).rgb * transmittance * accum;
+
+    float cubemapLod = diffuse * 7.416f;
+    vec3 incoming = textureLod(irrCubemap, rd, cubemapLod).rgb * transmittance * accum;
     vec4 newCol = lastImgVal * (1.f - invItr) + vec4(incoming, 1.f) * invItr;
 
     float add = lastImgVal.a < 0.f ? 1.f : 0.f;

@@ -35,6 +35,11 @@ public:
 		mTexture = tempTex;
 	}
 
+	void Reset()
+	{
+		glDeleteTextures(1, &mTexture);
+	}
+
 private:
 	GLuint mTexture;
 };

@@ -5,7 +5,7 @@
 #include <glm/gtx/component_wise.hpp>
 
 RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::shared_ptr<Dicom> dicom)
-	: mRaytraceProgram("shaders/raymarch.glsl", { "numSamples", "scaleFactor", "scanSize", "lowerBound", "view", "itrs", "depth" })
+	: mRaytraceProgram("shaders/raymarch.glsl", { "numSamples", "scaleFactor", "scanSize", "scanResolution", "lowerBound", "view", "itrs", "depth" })
 	, mGenRaysProgram("shaders/gen_rays.glsl", { "numSamples", "view", "itrs" })
 	, mDenoiseProgram("shaders/denoise.glsl", {})
 	, mPrecomputeProgram("shaders/precompute.glsl", {})
@@ -59,6 +59,7 @@ RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::
 	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA16, dicom->GetScanSize().x, dicom->GetScanSize().y, dicom->GetScanSize().z, 0, GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
 	glGenerateTextureMipmap(mBakedVolumeTexture.Get()); // For some reason I have to do this twice or there is a crash later
 
+	// create the baked volume texture containing (rgb transfer lut color, transfer lut opacity * density)
 	glBindImageTexture(1, dicom->GetTexture().Get(), 0, GL_FALSE, 0, GL_READ_ONLY, GL_R16);
 	glBindImageTexture(4, mBakedVolumeTexture.Get(), 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16);
 	mPrecomputeProgram.Use();
@@ -66,16 +67,14 @@ RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 
+	// generate mipmap for the volume texture generated in the previous compute shader
 	glGenerateTextureMipmap(mBakedVolumeTexture.Get());
-
-	//glActiveTexture(GL_TEXTURE1);
-	//glBindTexture(GL_TEXTURE_3D, dicom->GetTexture().Get());
 
 	glActiveTexture(GL_TEXTURE3);
 	glBindTexture(GL_TEXTURE_3D, mBakedVolumeTexture.Get());
 }
 
-void RaytracePass::Execute(bool resample)
+void RaytracePass::Execute()
 {
 	const glm::vec3 scanSize = glm::vec3(mDicom.lock()->GetScanSize());
 	const glm::vec3 physicalSize = glm::vec3(mDicom.lock()->GetPhysicalSize());
@@ -85,6 +84,7 @@ void RaytracePass::Execute(bool resample)
 	const glm::vec3 boundDim = (upperBound - mLowerBound);
 	mScaleFactor = 1.f / boundDim;
 
+	// generate the camera rays
 	mGenRaysProgram.Use();
 	mGenRaysProgram.UpdateUniform("numSamples", GLuint(mNumSamples));
 	mGenRaysProgram.UpdateUniform("view", mView);
@@ -93,25 +93,34 @@ void RaytracePass::Execute(bool resample)
 
 	glBindImageTexture(3, mBakedVolumeTexture.Get(), 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA16);
 
+	// trace the camera rays
 	mRaytraceProgram.Use();
 	mRaytraceProgram.UpdateUniform("numSamples", GLuint(mNumSamples));
 	mRaytraceProgram.UpdateUniform("scaleFactor", mScaleFactor);
 	mRaytraceProgram.UpdateUniform("scanSize", scanSize);
+	mRaytraceProgram.UpdateUniform("scanResolution", glm::vec3(mDicom.lock()->GetScanSize()));
 	mRaytraceProgram.UpdateUniform("lowerBound", mLowerBound);
 	mRaytraceProgram.UpdateUniform("view", mView);
 	mRaytraceProgram.UpdateUniform("itrs", mItrs);
 	mRaytraceProgram.UpdateUniform("depth", GLuint(1));
-	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 8, mSize.y / 16, 1);
+	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
 	
 	glActiveTexture(GL_TEXTURE3);
 	glBindTexture(GL_TEXTURE_3D, mBakedVolumeTexture.Get());
 
+	// trace the direct lighting rays
 	mConeTraceProgram.Use();
 	mConeTraceProgram.UpdateUniform("numSamples", GLuint(mNumSamples));
 	mConeTraceProgram.UpdateUniform("scaleFactor", mScaleFactor);
 	mConeTraceProgram.UpdateUniform("lowerBound", mLowerBound);
 	mConeTraceProgram.UpdateUniform("itrs", mItrs);
-	mConeTraceProgram.Execute((mSize.x * mNumSamples) / 8, mSize.y / 16, 1);
+	mConeTraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+
+	/*glBindImageTexture(6, mDenoiseTexture.Get(), 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);
+	mDenoiseProgram.Use();
+	mDenoiseProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
+
+	glBindImageTexture(6, mAccumTexture.Get(), 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);*/
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 	

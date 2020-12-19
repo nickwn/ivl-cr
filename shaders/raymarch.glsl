@@ -14,6 +14,7 @@ layout(binding = 7) uniform sampler1D clearcoatLUT; // TODO: replace with cubic 
 uniform uint numSamples;
 uniform vec3 scaleFactor;
 uniform vec3 scanSize;
+uniform vec3 scanResolution;
 uniform vec3 lowerBound;
 uniform mat4 view;
 uniform int itrs;
@@ -32,15 +33,15 @@ vec2 rayBox(vec3 ro, vec3 rd, vec3 mn, vec3 mx) {
 vec3 calcGradient(ivec3 tuv)
 {
     vec3 highVals = vec3(
-        imageLoad(rawVolume, tuv + ivec3(1, 0, 0)).r,
-        imageLoad(rawVolume, tuv + ivec3(0, 1, 0)).r,
-        imageLoad(rawVolume, tuv + ivec3(0, 0, 1)).r
+        imageLoad(sigmaVolume, tuv + ivec3(1, 0, 0)).a,
+        imageLoad(sigmaVolume, tuv + ivec3(0, 1, 0)).a,
+        imageLoad(sigmaVolume, tuv + ivec3(0, 0, 1)).a
     );
 
     vec3 lowVals = vec3(
-        imageLoad(rawVolume, tuv + ivec3(-1, 0, 0)).r,
-        imageLoad(rawVolume, tuv + ivec3(0, -1, 0)).r,
-        imageLoad(rawVolume, tuv + ivec3(0, 0, -1)).r
+        imageLoad(sigmaVolume, tuv + ivec3(-1, 0, 0)).a,
+        imageLoad(sigmaVolume, tuv + ivec3(0, -1, 0)).a,
+        imageLoad(sigmaVolume, tuv + ivec3(0, 0, -1)).a
     );
 
     return -highVals + lowVals;
@@ -60,21 +61,34 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 uvw, ou
     ro = (ro - lowerBound) * scaleFactor;
     rd *= scaleFactor;
 
+    isect = rayBox(ro, rd, vec3(0.f), vec3(1.f));
+    isect.x = max(0.f, isect.x);
+    isect.y = min(3.f, isect.y);
+
+    vec3 texelSize = 1 / scanResolution;
+    float eps = min(min(texelSize.x, texelSize.y), texelSize.z) / 64;
+
+    texelSize *= sign(rd);
+
     hit = 1;
     while (s > 0.f)
     {
-        uvw = ro + isect.x * rd;
-        idx = ivec3(uvw * scanSize);
         if (isect.x >= isect.y)
         {
             hit = 0;
             break;
         }
 
+        uvw = ro + isect.x * rd;
+        idx = ivec3(uvw * scanSize);
+
+        vec2 ti = rayBox(ro, rd, uvw, uvw + texelSize);
+        float dt = max(0.f, ti.y - ti.x);
+
         float sigmaT = imageLoad(sigmaVolume, idx).a;
 
-        s -= sigmaT * stepSize;
-        isect.x += stepSize;
+        s -= sigmaT * dt;
+        isect.x += dt + eps;
     }
 
     uvw = (uvw / scaleFactor) + lowerBound;
@@ -85,16 +99,15 @@ void main()
     // get index in global work group i.e x,y position
     ivec2 index = ivec2(gl_GlobalInvocationID.xy);
     ivec2 screenIndex = ivec2(index.x / numSamples, index.y);
-    uint sampleNum = index.x % numSamples;
-
+    
+    initRNG(index, itrs);
+    
     vec4 accumPk = imageLoad(accumTex, index);
     vec3 accum = accumPk.rgb;
-    if (length(accum) < 0.0001) return;
-
-    // TODO: seed better
-    initRNG(index, itrs);
-
     vec4 rayPosPk = imageLoad(rayPosTex, index);
+
+    // 3 pieces of data are packed into two textures here:
+    // ro is in rayPosPk.xyz, rd is in spherical coordinates phi and theta
 
     vec3 ro = rayPosPk.xyz;
     vec3 rd = vec3(
@@ -145,7 +158,7 @@ void main()
     vec3 col = imageLoad(sigmaVolume, idx).rgb;
 
     // shade with brdf or phase function (but rn just brdf)
-    vec2 uv = rand2(); // halton sample for importance sampling
+    vec2 uv = rand2();
     vec3 wo = -rd, grad = calcGradient(idx), pct = vec3(0.0), f = vec3(0.0), thpt = vec3(0.f);
     float pbrdf = pBRDF(opacity, length(grad), 1.0), pdf = 0.f, wiDotN = 1.f;
     bool goodSample = true;
@@ -165,21 +178,22 @@ void main()
         else
         {
             wi.xyz = sampleLambertian(n, uv);
+            wm = normalize(wi.xyz + wo);
             wiDotN = dot(wi.xyz, n);
             wi.w = -1.f;
         }
 
-        // TODO: find out where these stupid rare nans are coming from
         float d, absDotNL;
         f = vec3(EvaluateDisneyClearcoat(pClearcoat, alpha, wo, wm, wi.xyz, n, d));
         pct = f * wiDotN;
         pdf = clearcoatPDF(d, dot(wo, wm));
-        thpt += pdf == 0.0 || isnan(pdf) || any(isnan(pct)) ? vec3(0.0) : pct / pdf;
+        // TODO: lambertian sampled rays sometimes have invalid wm
+        thpt += abs(dot(wo, wm)) < 0.0001f ? vec3(0.0) : pct / pdf;
 
         f = lambertian(col);
         pdf = lambertianPDF(wiDotN);
         pct = f * wiDotN;
-        thpt += pdf == 0.0 || isnan(pdf) || any(isnan(pct)) ? vec3(0.0) : pct / pdf;
+        thpt += pct / pdf;
     }
     else
     {
