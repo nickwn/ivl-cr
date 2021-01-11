@@ -49,7 +49,7 @@ vec3 calcGradient(ivec3 tuv)
 
 const float farT = 5.0; // hehe
 const float stepSize = 0.001;
-const float densityScale = 0.01;
+const float densityScale = 0.005;
 const float lightingMult = 1.0;
 
 void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 uvw, out ivec3 idx)

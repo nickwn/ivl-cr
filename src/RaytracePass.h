@@ -19,6 +19,7 @@ public:
 	const UniqueTexture& GetColorTexture() { return mColorTexture; }
 
 	void SetView(const glm::mat4& view) { mView = view; }
+	void SetPhysicalSize(const glm::vec3& physicalSize) { mPhysicalSize = physicalSize; }
 
 	void SetItrs(int itrs) { mItrs = itrs; }
 	int GetItrs() const { return mItrs; }
@@ -41,6 +42,7 @@ private:
 	UniqueTexture mDenoiseTexture;
 	UniqueTexture mBakedVolumeTexture;
 
+	glm::vec3 mPhysicalSize;
 	glm::vec3 mScaleFactor;
 	glm::vec3 mLowerBound;
 	glm::mat4 mView;

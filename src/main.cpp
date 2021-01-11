@@ -332,11 +332,11 @@ int main(int argc, char* argv[])
 	// Volume matrix
 	YAML::Node volumeNode = config["volume"];
 	const glm::vec3 volumeTranslation = volumeNode["pos"].as<glm::vec3>();
-	const glm::vec3 volumeScale = volumeNode["scale"].as<glm::vec3>() * glm::vec3(1.f, -1.f, 1.f); // flip the volume because it is loaded in upside-down
+	const glm::vec3 volumeScale = volumeNode["scale"].as<glm::vec3>();
 	const glm::mat4 volumeRotation = volumeNode["rotation"].as<glm::mat4>(
 		glm::mat4_cast(volumeNode["rotation"].as<glm::quat>(glm::quat()))
 	);
-	const glm::mat4 volumeMat = glm::translate(volumeTranslation) * glm::scale(volumeScale) * volumeRotation;
+	const glm::mat4 volumeMat = volumeRotation * glm::translate(volumeTranslation);
 
 	// Camera matrix
 	YAML::Node cameraNode = config["camera"];
@@ -436,6 +436,7 @@ int main(int argc, char* argv[])
 
 	const uint32_t numSamples = 8;
 	RaytracePass raytracePass(size, numSamples, dicom);
+	raytracePass.SetPhysicalSize(volumeScale);
 
 	glActiveTexture(GL_TEXTURE4);
 	Cubemap cubemap(cubemapFiles);

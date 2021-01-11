@@ -13,6 +13,7 @@ RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::
 	, mSize(size)
 	, mNumSamples(samples)
 	, mDicom(dicom)
+	, mPhysicalSize()
 	, mItrs(1)
 {
 	glActiveTexture(GL_TEXTURE0);
@@ -77,10 +78,10 @@ RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::
 void RaytracePass::Execute()
 {
 	const glm::vec3 scanSize = glm::vec3(mDicom.lock()->GetScanSize());
-	const glm::vec3 physicalSize = glm::vec3(mDicom.lock()->GetPhysicalSize());
+	const glm::vec3 physicalSize = mPhysicalSize; // glm::vec3(mDicom.lock()->GetPhysicalSize());
 	const float invMaxComp = 1.f / std::max(std::max(physicalSize.x, physicalSize.y), physicalSize.z);
-	mLowerBound = -physicalSize * invMaxComp;
-	const glm::vec3 upperBound = physicalSize * invMaxComp;
+	mLowerBound = -physicalSize * 0.5f;// invMaxComp;
+	const glm::vec3 upperBound = physicalSize * 0.5f;// invMaxComp;
 	const glm::vec3 boundDim = (upperBound - mLowerBound);
 	mScaleFactor = 1.f / boundDim;
 
@@ -115,12 +116,6 @@ void RaytracePass::Execute()
 	mConeTraceProgram.UpdateUniform("lowerBound", mLowerBound);
 	mConeTraceProgram.UpdateUniform("itrs", mItrs);
 	mConeTraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
-
-	/*glBindImageTexture(6, mDenoiseTexture.Get(), 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);
-	mDenoiseProgram.Use();
-	mDenoiseProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
-
-	glBindImageTexture(6, mAccumTexture.Get(), 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA16F);*/
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 	

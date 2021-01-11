@@ -2,7 +2,7 @@
 name: new
 volume:
   pos: [0.0, 0.0, 0.0]
-  scale: [1.0, 1.0, 1.0]
+  scale: [1.0, 1.0, 0.454]
   rotation: [0.9727135, 0.018041437, 0.23130894, 0.0, -0.0011439843, 0.9973326, -0.07297787,
     0.0, -0.23200823, 0.07072184, 0.9701394, 0.0, 0.0, 0.0, 0.0, 1.0]
 camera:
@@ -36,4 +36,4 @@ mask:
   center line: false
   value: [false, false, false, true, false, false, false, false]
 cubemap: studio1
-itrs: 100
+itrs: 0
