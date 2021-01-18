@@ -30,8 +30,8 @@ vec2 rayBox(vec3 ro, vec3 rd, vec3 mn, vec3 mx) {
 
 const float farT = 5.0; // hehe
 const float stepSize = 0.001;
-const float densityScale = 0.005;
 const float lightingMult = 1.0;
+volatile vec3 helperSigmaT = vec3(0.f);
 
 void trace(in vec3 ro, in vec3 rd, in vec2 isect, in float diffuse, out vec3 transmittance)
 {
@@ -51,7 +51,7 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, in float diffuse, out vec3 tra
     float multiplier = diffuse * (coneSpread / voxelSize), stepMultiplier = 1.f;
     vec3 linearDensity = vec3(0.0f);
     uint needsHelp = 1, finished = 0;
-    coherent volatile bool imDone = false;
+    bool imDone = false;
     while (finished != startActive)
     {
         uint getsHelp = findLSB(needsHelp);
@@ -73,9 +73,9 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, in float diffuse, out vec3 tra
         float level = log2(l);
 
         vec4 bakedVal = textureLod(sigmaVolume, rel, min(mipmapHardcap, level));
-        vec3 sigmaT = vec3(pow(bakedVal.a, 1.5f) * l) * (vec3(1.f) - bakedVal.rgb);
+        vec3 sigmaT = vec3(pow(bakedVal.a, 1.2f) * l) * (vec3(1.f) - bakedVal.rgb);
         
-        vec3 helperSigmaT = vec3(imDone ? sigmaT : vec3(0.f));
+        helperSigmaT = vec3(imDone ? sigmaT : vec3(0.f));
         if (!imDone)
         {
             if (gettingHelp)

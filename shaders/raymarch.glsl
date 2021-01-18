@@ -6,7 +6,7 @@ layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f, binding = 0) uniform image2D imgOutput;
 layout(r16, binding = 1) uniform image3D rawVolume;
 layout(binding = 2) uniform sampler1D transferLUT;
-layout(rgba16, binding = 3) uniform image3D sigmaVolume;
+layout(binding = 3) uniform sampler1D opacityLUT;
 layout(binding = 4) uniform samplerCube cubemap;
 layout(rgba16f, binding = 5) uniform image2D rayPosTex;
 layout(rgba16f, binding = 6) uniform image2D accumTex;
@@ -33,15 +33,15 @@ vec2 rayBox(vec3 ro, vec3 rd, vec3 mn, vec3 mx) {
 vec3 calcGradient(ivec3 tuv)
 {
     vec3 highVals = vec3(
-        imageLoad(sigmaVolume, tuv + ivec3(1, 0, 0)).a,
-        imageLoad(sigmaVolume, tuv + ivec3(0, 1, 0)).a,
-        imageLoad(sigmaVolume, tuv + ivec3(0, 0, 1)).a
+        imageLoad(rawVolume, tuv + ivec3(1, 0, 0)).r,
+        imageLoad(rawVolume, tuv + ivec3(0, 1, 0)).r,
+        imageLoad(rawVolume, tuv + ivec3(0, 0, 1)).r
     );
 
     vec3 lowVals = vec3(
-        imageLoad(sigmaVolume, tuv + ivec3(-1, 0, 0)).a,
-        imageLoad(sigmaVolume, tuv + ivec3(0, -1, 0)).a,
-        imageLoad(sigmaVolume, tuv + ivec3(0, 0, -1)).a
+        imageLoad(rawVolume, tuv + ivec3(-1, 0, 0)).r,
+        imageLoad(rawVolume, tuv + ivec3(0, -1, 0)).r,
+        imageLoad(rawVolume, tuv + ivec3(0, 0, -1)).r
     );
 
     return -highVals + lowVals;
@@ -51,19 +51,20 @@ const float farT = 5.0; // hehe
 const float stepSize = 0.001;
 const float densityScale = 0.005;
 const float lightingMult = 1.0;
+const float surfaceThresh = 0.7f;
 
-void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 uvw, out ivec3 idx)
+void trace(in vec3 ro, in vec3 rd, out uint hit, out vec3 uvw, out ivec3 idx)
 {
     float s = -log(rand()) * densityScale;
-    isect.x = rand() * stepSize;
 
     // compute ray in index space
     ro = (ro - lowerBound) * scaleFactor;
     rd *= scaleFactor;
 
-    isect = rayBox(ro, rd, vec3(0.f), vec3(1.f));
-    isect.x = max(0.f, isect.x);
+    vec2 isect = rayBox(ro, rd, vec3(0.f), vec3(1.f));
+    //isect.x = max(0.f, isect.x);
     isect.y = min(3.f, isect.y);
+    isect.x = stepSize * rand();
 
     vec3 texelSize = 1 / scanResolution;
     float eps = min(min(texelSize.x, texelSize.y), texelSize.z) / 64;
@@ -83,12 +84,19 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, out uint hit, out vec3 uvw, ou
         idx = ivec3(uvw * scanSize);
 
         vec2 ti = rayBox(ro, rd, uvw, uvw + texelSize);
-        float dt = max(0.f, ti.y - ti.x);
+        float dt = stepSize; // max(0.f, ti.y - ti.x);
 
-        float sigmaT = imageLoad(sigmaVolume, idx).a;
+        float density = imageLoad(rawVolume, idx).r;
+        float opacity = texture(opacityLUT, density).r;
+        float sigmaT = opacity;
+
+        if (sigmaT > surfaceThresh)
+        {
+            break;
+        }
 
         s -= sigmaT * dt;
-        isect.x += dt + eps;
+        isect.x += dt; // + eps;
     }
 
     uvw = (uvw / scaleFactor) + lowerBound;
@@ -137,10 +145,10 @@ void main()
     uint hit = 1;
     vec3 uvw = vec3(0.0);
     ivec3 idx = ivec3(0);
-    trace(ro, rd, isect, hit, uvw, idx);
+    trace(ro, rd, hit, uvw, idx);
 
     float density = imageLoad(rawVolume, idx).r;
-    float opacity = imageLoad(sigmaVolume, idx).a / density;
+    float opacity = texture(opacityLUT, density).r;
 
     vec4 lastImgVal = imageLoad(imgOutput, index);
     if (hit == 0)
@@ -155,7 +163,7 @@ void main()
         return;
     }
 
-    vec3 col = imageLoad(sigmaVolume, idx).rgb;
+    vec3 col = texture(transferLUT, density).rgb;
 
     // shade with brdf or phase function (but rn just brdf)
     vec2 uv = rand2();
@@ -163,9 +171,8 @@ void main()
     float pbrdf = pBRDF(opacity, length(grad), 1.0), pdf = 0.f, wiDotN = 1.f;
     bool goodSample = true;
 
-    // reservoir state
     vec4 wi = vec4(0.0); // y
-    if (rand() < pbrdf)
+    if (rand() < pbrdf || opacity * density > surfaceThresh)
     {
         const float alpha = 0.9, pClearcoat = texture(clearcoatLUT, density).r;
         vec3 n = normalize(grad), wm = vec3(0.f);

@@ -8,7 +8,7 @@ RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::
 	: mRaytraceProgram("shaders/raymarch.glsl", { "numSamples", "scaleFactor", "scanSize", "scanResolution", "lowerBound", "view", "itrs", "depth" })
 	, mGenRaysProgram("shaders/gen_rays.glsl", { "numSamples", "view", "itrs" })
 	, mDenoiseProgram("shaders/denoise.glsl", {})
-	, mPrecomputeProgram("shaders/precompute.glsl", {})
+	, mPrecomputeProgram("shaders/precompute.glsl", { "scanResolution" })
 	, mConeTraceProgram("shaders/raymarch_direct.glsl", { "numSamples", "scaleFactor", "lowerBound", "itrs" })
 	, mSize(size)
 	, mNumSamples(samples)
@@ -50,6 +50,7 @@ RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::
 	glm::ivec3 dicomDim = mDicom.lock()->GetScanSize();
 	GLint lodLevels = 1 + std::floor(std::log2(glm::compMax(dicomDim)));
 
+	const glm::ivec3 bakeSize = glm::ivec3(128);
 	glActiveTexture(GL_TEXTURE4);
 	glBindTexture(GL_TEXTURE_3D, mBakedVolumeTexture.Get());
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -57,25 +58,24 @@ RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA16, dicom->GetScanSize().x, dicom->GetScanSize().y, dicom->GetScanSize().z, 0, GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+	//glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA16, dicom->GetScanSize().x, dicom->GetScanSize().y, dicom->GetScanSize().z, 0, GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA16, bakeSize.x, bakeSize.y, bakeSize.z, 0, GL_RGBA, GL_UNSIGNED_SHORT, nullptr);
 	glGenerateTextureMipmap(mBakedVolumeTexture.Get()); // For some reason I have to do this twice or there is a crash later
 
 	// create the baked volume texture containing (rgb transfer lut color, transfer lut opacity * density)
 	glBindImageTexture(1, dicom->GetTexture().Get(), 0, GL_FALSE, 0, GL_READ_ONLY, GL_R16);
 	glBindImageTexture(4, mBakedVolumeTexture.Get(), 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16);
 	mPrecomputeProgram.Use();
-	mPrecomputeProgram.Execute(dicom->GetScanSize().x / 8, dicom->GetScanSize().y / 8, dicom->GetScanSize().z / 8);
+	mPrecomputeProgram.UpdateUniform("scanResolution", dicom->GetScanSize());
+	mPrecomputeProgram.Execute(bakeSize.x / 8, bakeSize.y / 8, bakeSize.z / 8);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 
 	// generate mipmap for the volume texture generated in the previous compute shader
 	glGenerateTextureMipmap(mBakedVolumeTexture.Get());
-
-	glActiveTexture(GL_TEXTURE3);
-	glBindTexture(GL_TEXTURE_3D, mBakedVolumeTexture.Get());
 }
 
-void RaytracePass::Execute()
+void RaytracePass::Execute(GLuint opacityLUT)
 {
 	const glm::vec3 scanSize = glm::vec3(mDicom.lock()->GetScanSize());
 	const glm::vec3 physicalSize = mPhysicalSize; // glm::vec3(mDicom.lock()->GetPhysicalSize());
@@ -92,7 +92,9 @@ void RaytracePass::Execute()
 	mGenRaysProgram.UpdateUniform("itrs", mItrs);
 	mGenRaysProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
 
-	glBindImageTexture(3, mBakedVolumeTexture.Get(), 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA16);
+	//glBindImageTexture(3, mBakedVolumeTexture.Get(), 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA16);
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_1D, opacityLUT);
 
 	// trace the camera rays
 	mRaytraceProgram.Use();

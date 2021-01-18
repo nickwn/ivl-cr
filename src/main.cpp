@@ -357,13 +357,13 @@ int main(int argc, char* argv[])
 		opacityTriangles.push_back(triangle);
 	}
 
-	OpacityTransferFunction opacityTF = OpacityTransferFunction(opacityTriangles);
-	/*PLF<float, float> opacityTF = PLF<float, float>();
+	//OpacityTransferFunction opacityTF = OpacityTransferFunction(opacityTriangles);
+	PLF<float, float> opacityTF = PLF<float, float>();
 	opacityTF.AddStop(0.f, 0.f);
 	opacityTF.AddStop(0.4f, 0.f);
-	//opacityTF.AddStop(0.4f, 1.f);
-	//opacityTF.AddStop(.41f, 1.f);
-	opacityTF.AddStop(1.f, 1.f);*/
+	opacityTF.AddStop(0.41f, 1.f);
+	//opacityTF.AddStop(.8f, 1.f);
+	opacityTF.AddStop(1.f, 1.f);
 
 	glActiveTexture(GL_TEXTURE3);
 	opacityTF.EvaluateTexture(100);
@@ -412,8 +412,8 @@ int main(int argc, char* argv[])
 	ClearcoatPF clearcoatPF;
 	clearcoatPF.AddStop(0.0f, 0.0f);
 	clearcoatPF.AddStop(.65f, 0.0f);
-	clearcoatPF.AddStop(0.7f, 0.7f);
-	clearcoatPF.AddStop(1.0f, 0.7f);
+	//clearcoatPF.AddStop(0.7f, 0.7f);
+	clearcoatPF.AddStop(1.0f, 0.0f);
 	glActiveTexture(GL_TEXTURE7);
 	clearcoatPF.EvaluateTexture(100);
 
@@ -464,7 +464,7 @@ int main(int argc, char* argv[])
 
 		const glm::mat4 view = viewController->GetView();
 		raytracePass.SetView(view);
-		raytracePass.Execute();
+		raytracePass.Execute(opacityTF.Unique().Get());
 
 		drawQuad.Execute(raytracePass.GetColorTexture());
 		glfwPollEvents();

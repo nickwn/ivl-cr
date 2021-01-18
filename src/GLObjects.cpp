@@ -196,6 +196,12 @@ void ComputeProgram::UpdateUniform(std::string name, const glm::vec3 value)
 }
 
 template<>
+void ComputeProgram::UpdateUniform(std::string name, const glm::ivec3 value)
+{
+	glUniform3iv(mUniformMap[name], 1, glm::value_ptr(value));
+}
+
+template<>
 void ComputeProgram::UpdateUniform(std::string name, const glm::mat4 value)
 {
 	glUniformMatrix4fv(mUniformMap[name], 1, GL_FALSE, glm::value_ptr(value));

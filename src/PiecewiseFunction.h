@@ -53,6 +53,8 @@ public:
 		GenTexture(evals);
 	}
 
+	UniqueTexture& Unique() { return mUniqueTexture; }
+
 private:
 
 	std::vector<V> Evaluate(const uint32_t size) const
@@ -100,6 +102,8 @@ public:
 
 	void EvaluateTexture(const uint32_t size) const;
 
+	UniqueTexture& Unique() { return mUniqueColorTexture; }
+
 private:
 	std::array<float, 3> mContrast;
 	UniqueTexture mUniqueColorTexture;
@@ -114,6 +118,8 @@ public:
 	{}
 
 	void EvaluateTexture(const uint32_t size) const;
+
+	UniqueTexture& Unique() { return mUniqueOpacityTexture; }
 
 private:
 	
@@ -134,6 +140,9 @@ public:
 
 	void EvaluateOpacityTexture(const uint32_t size) const;
 	void EvaluateColorTexture(const uint32_t size) const;
+
+	UniqueTexture& UniqueOpacity() { return mUniqueOpacityTexture; }
+	UniqueTexture& UniqueColor() { return mUniqueColorTexture; }
 
 private:
 
