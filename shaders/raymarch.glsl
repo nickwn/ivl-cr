@@ -4,7 +4,7 @@
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f, binding = 0) uniform image2D imgOutput;
-layout(r16, binding = 1) uniform image3D rawVolume;
+layout(binding = 1) uniform sampler3D rawVolume;
 layout(binding = 2) uniform sampler1D transferLUT;
 layout(binding = 3) uniform sampler1D opacityLUT;
 layout(binding = 4) uniform samplerCube cubemap;
@@ -30,21 +30,21 @@ vec2 rayBox(vec3 ro, vec3 rd, vec3 mn, vec3 mx) {
     return vec2(max(max(tmin.x, tmin.y), tmin.z), min(min(tmax.x, tmax.y), tmax.z));
 }
 
-vec3 calcGradient(ivec3 tuv)
+vec3 calcGradient(vec3 uvw)
 {
     vec3 highVals = vec3(
-        imageLoad(rawVolume, tuv + ivec3(1, 0, 0)).r,
-        imageLoad(rawVolume, tuv + ivec3(0, 1, 0)).r,
-        imageLoad(rawVolume, tuv + ivec3(0, 0, 1)).r
+        textureOffset(rawVolume, uvw, ivec3(1, 0, 0)).r,
+        textureOffset(rawVolume, uvw, ivec3(0, 1, 0)).r,
+        textureOffset(rawVolume, uvw, ivec3(0, 0, 1)).r
     );
 
     vec3 lowVals = vec3(
-        imageLoad(rawVolume, tuv + ivec3(-1, 0, 0)).r,
-        imageLoad(rawVolume, tuv + ivec3(0, -1, 0)).r,
-        imageLoad(rawVolume, tuv + ivec3(0, 0, -1)).r
+        textureOffset(rawVolume, uvw, ivec3(-1, 0, 0)).r,
+        textureOffset(rawVolume, uvw, ivec3(0, -1, 0)).r,
+        textureOffset(rawVolume, uvw, ivec3(0, 0, -1)).r
     );
 
-    return -highVals + lowVals;
+    return lowVals - highVals;
 }
 
 const float farT = 5.0; // hehe
@@ -53,7 +53,7 @@ const float densityScale = 0.005;
 const float lightingMult = 1.0;
 const float surfaceThresh = 0.7f;
 
-void trace(in vec3 ro, in vec3 rd, out uint hit, out vec3 uvw, out ivec3 idx)
+void trace(in vec3 ro, in vec3 rd, out uint hit, out vec3 uvw)
 {
     float s = -log(rand()) * densityScale;
 
@@ -62,7 +62,6 @@ void trace(in vec3 ro, in vec3 rd, out uint hit, out vec3 uvw, out ivec3 idx)
     rd *= scaleFactor;
 
     vec2 isect = rayBox(ro, rd, vec3(0.f), vec3(1.f));
-    //isect.x = max(0.f, isect.x);
     isect.y = min(3.f, isect.y);
     isect.x = stepSize * rand();
 
@@ -81,12 +80,8 @@ void trace(in vec3 ro, in vec3 rd, out uint hit, out vec3 uvw, out ivec3 idx)
         }
 
         uvw = ro + isect.x * rd;
-        idx = ivec3(uvw * scanSize);
 
-        vec2 ti = rayBox(ro, rd, uvw, uvw + texelSize);
-        float dt = stepSize; // max(0.f, ti.y - ti.x);
-
-        float density = imageLoad(rawVolume, idx).r;
+        float density = texture(rawVolume, uvw).r;
         float opacity = texture(opacityLUT, density).r;
         float sigmaT = opacity;
 
@@ -95,11 +90,9 @@ void trace(in vec3 ro, in vec3 rd, out uint hit, out vec3 uvw, out ivec3 idx)
             break;
         }
 
-        s -= sigmaT * dt;
-        isect.x += dt; // + eps;
+        s -= sigmaT * stepSize;
+        isect.x += stepSize;
     }
-
-    uvw = (uvw / scaleFactor) + lowerBound;
 }
 
 void main()
@@ -116,7 +109,6 @@ void main()
 
     // 3 pieces of data are packed into two textures here:
     // ro is in rayPosPk.xyz, rd is in spherical coordinates phi and theta
-
     vec3 ro = rayPosPk.xyz;
     vec3 rd = vec3(
         sin(rayPosPk.w) * cos(accumPk.w),
@@ -138,16 +130,15 @@ void main()
         return;
     }
 
-    // init woodcock tracking from camera
+    // start raymarching at intersection
     ro += rd * isect.x;
     isect.y -= isect.x;
 
     uint hit = 1;
     vec3 uvw = vec3(0.0);
-    ivec3 idx = ivec3(0);
-    trace(ro, rd, hit, uvw, idx);
+    trace(ro, rd, hit, uvw);
 
-    float density = imageLoad(rawVolume, idx).r;
+    float density = texture(rawVolume, uvw).r;
     float opacity = texture(opacityLUT, density).r;
 
     vec4 lastImgVal = imageLoad(imgOutput, index);
@@ -167,12 +158,11 @@ void main()
 
     // shade with brdf or phase function (but rn just brdf)
     vec2 uv = rand2();
-    vec3 wo = -rd, grad = calcGradient(idx), pct = vec3(0.0), f = vec3(0.0), thpt = vec3(0.f);
+    vec3 wo = -rd, grad = calcGradient(uvw), pct = vec3(0.0), f = vec3(0.0), thpt = vec3(0.f);
     float pbrdf = pBRDF(opacity, length(grad), 1.0), pdf = 0.f, wiDotN = 1.f;
-    bool goodSample = true;
-
-    vec4 wi = vec4(0.0); // y
-    if (rand() < pbrdf || opacity * density > surfaceThresh)
+    rd *= scaleFactor;
+    vec4 wi = vec4(0.0); 
+    if (rand() < pbrdf || opacity > surfaceThresh)
     {
         const float alpha = 0.9, pClearcoat = texture(clearcoatLUT, density).r;
         vec3 n = normalize(grad), wm = vec3(0.f);
@@ -194,8 +184,9 @@ void main()
         f = vec3(EvaluateDisneyClearcoat(pClearcoat, alpha, wo, wm, wi.xyz, n, d));
         pct = f * wiDotN;
         pdf = clearcoatPDF(d, dot(wo, wm));
-        // TODO: lambertian sampled rays sometimes have invalid wm
-        thpt += abs(dot(wo, wm)) < 0.0001f ? vec3(0.0) : pct / pdf;
+
+        // TODO: lambertian sampled rays sometimes have invalid wm, aka dot(wo, wm) = 0
+        thpt += (any(isnan(f)) || any(isnan(pdf))) ? vec3(0.0) : pct / pdf;
 
         f = lambertian(col);
         pdf = lambertianPDF(wiDotN);

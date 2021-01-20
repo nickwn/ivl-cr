@@ -12,9 +12,9 @@
 class RaytracePass
 {
 public:
-	RaytracePass(const glm::ivec2& size, const uint32_t samples, std::shared_ptr<Dicom> dicom);
+	RaytracePass(const glm::ivec2& size, const uint32_t samples, std::shared_ptr<Dicom> dicom, GLuint transferLUT, GLuint opacityLUT);
 
-	void Execute(GLuint opacityLUT);
+	void Execute(GLuint transferLUT, GLuint opacityLUT, GLuint clearcoatLUT, GLuint cubemap, GLuint volume);
 
 	const UniqueTexture& GetColorTexture() { return mColorTexture; }
 

@@ -48,6 +48,8 @@ class Cubemap
 {
 public:
 	Cubemap(const std::vector<std::string>& filenames);
+
+	const UniqueTexture& Unique() const { return mUniqueTexture; }
 private:
 	UniqueTexture mUniqueTexture;
 };
@@ -58,7 +60,23 @@ void linkProgram(GLuint program);
 class ComputeProgram
 {
 public:
-	ComputeProgram(std::string filename, std::vector<std::string> uniforms = {});
+
+	// for images/textures
+	struct TexBinding
+	{
+		GLenum binding;
+		GLenum target;
+	};
+
+	struct ImgBinding
+	{
+		GLuint binding;
+		GLenum access;
+		GLenum format;
+	};
+
+	ComputeProgram(std::string filename, std::vector<std::string> uniforms = {}, std::unordered_map<std::string, TexBinding> texBindings = {}, 
+		std::unordered_map<std::string, ImgBinding> imgBindings = {});
 	~ComputeProgram();
 
 	void Use();
@@ -66,10 +84,16 @@ public:
 	template<typename T>
 	void UpdateUniform(std::string name, T value);
 
+	void BindTexture(std::string name, GLuint tex);
+
+	void BindImage(std::string name, GLuint tex, GLuint level = 0);
+
 	void Execute(GLuint x, GLuint y, GLuint z);
 
 private:
 	std::unordered_map<std::string, GLuint> mUniformMap;
+	std::unordered_map<std::string, TexBinding> mTexBindings;
+	std::unordered_map<std::string, ImgBinding> mImgBindings;
 
 	GLuint mShader;
 	GLuint mProgram;

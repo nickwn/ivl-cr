@@ -145,7 +145,13 @@ void linkProgram(GLuint program)
 	}
 }
 
-ComputeProgram::ComputeProgram(std::string filename, std::vector<std::string> uniforms)
+ComputeProgram::ComputeProgram(std::string filename, std::vector<std::string> uniforms, std::unordered_map<std::string, TexBinding> texBindings,
+	std::unordered_map<std::string, ImgBinding> imgBindings)
+	: mShader()
+	, mProgram()
+	, mUniformMap()
+	, mTexBindings(std::move(texBindings))
+	, mImgBindings(std::move(imgBindings))
 {	
 	mShader = glCreateShader(GL_COMPUTE_SHADER);
 	mProgram = glCreateProgram();
@@ -205,6 +211,19 @@ template<>
 void ComputeProgram::UpdateUniform(std::string name, const glm::mat4 value)
 {
 	glUniformMatrix4fv(mUniformMap[name], 1, GL_FALSE, glm::value_ptr(value));
+}
+
+void ComputeProgram::BindTexture(std::string name, GLuint tex)
+{
+	const TexBinding& bindInfo = mTexBindings.at(name);
+	glActiveTexture(bindInfo.binding);
+	glBindTexture(bindInfo.target, tex);
+}
+
+void ComputeProgram::BindImage(std::string name, GLuint tex, GLuint level)
+{
+	const ImgBinding& bindInfo = mImgBindings.at(name);
+	glBindImageTexture(bindInfo.binding, tex, level, GL_FALSE, 0, bindInfo.access, bindInfo.format);
 }
 
 void ComputeProgram::Execute(GLuint x, GLuint y, GLuint z)

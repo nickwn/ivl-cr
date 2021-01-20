@@ -332,7 +332,7 @@ int main(int argc, char* argv[])
 	// Volume matrix
 	YAML::Node volumeNode = config["volume"];
 	const glm::vec3 volumeTranslation = volumeNode["pos"].as<glm::vec3>();
-	const glm::vec3 volumeScale = volumeNode["scale"].as<glm::vec3>();
+	const glm::vec3 volumeScale = volumeNode["scale"].as<glm::vec3>() * glm::vec3(1.f, -1.f, 1.f);
 	const glm::mat4 volumeRotation = volumeNode["rotation"].as<glm::mat4>(
 		glm::mat4_cast(volumeNode["rotation"].as<glm::quat>(glm::quat()))
 	);
@@ -360,15 +360,16 @@ int main(int argc, char* argv[])
 	//OpacityTransferFunction opacityTF = OpacityTransferFunction(opacityTriangles);
 	PLF<float, float> opacityTF = PLF<float, float>();
 	opacityTF.AddStop(0.f, 0.f);
-	opacityTF.AddStop(0.4f, 0.f);
-	opacityTF.AddStop(0.41f, 1.f);
-	//opacityTF.AddStop(.8f, 1.f);
+	opacityTF.AddStop(0.3f, 0.f);
+	//opacityTF.AddStop(0.41f, 1.f);
+	opacityTF.AddStop(.5f, 1.f);
 	opacityTF.AddStop(1.f, 1.f);
 
-	glActiveTexture(GL_TEXTURE3);
+	glActiveTexture(GL_TEXTURE0);
 	opacityTF.EvaluateTexture(100);
 
 	using ColorPLF = PLF<float, glm::vec4>;
+	GLuint colorTF = -1;
 	std::unique_ptr<HSVTransferFunction> hsvTF;
 	std::unique_ptr<ColorPLF> rgbTF;
 	std::string colorScheme = transferFunction["color scheme"].as<std::string>();
@@ -377,8 +378,9 @@ int main(int argc, char* argv[])
 		std::array<float, 3> contrastVals = transferFunction["contrast"].as<std::array<float, 3>>();
 		hsvTF = std::make_unique<HSVTransferFunction>(contrastVals);
 
-		glActiveTexture(GL_TEXTURE2);
 		hsvTF->EvaluateTexture(100);
+
+		colorTF = hsvTF->Unique().Get();
 	}
 	else if (colorScheme == std::string("RGB-gradient"))
 	{
@@ -403,18 +405,22 @@ int main(int argc, char* argv[])
 			rgbTF->AddStop(stopPositions[i], glm::vec4(stopColors[i], 1.f));
 		}
 
-		glActiveTexture(GL_TEXTURE2);
 		rgbTF->EvaluateTexture(100);
+
+		colorTF = rgbTF->Unique().Get();
+	}
+	else
+	{
+		assert(false && "invalid color scheme");
 	}
 
 	// hard-set clearcoat PLF
 	using ClearcoatPF = PLF<float, float>;
 	ClearcoatPF clearcoatPF;
 	clearcoatPF.AddStop(0.0f, 0.0f);
-	clearcoatPF.AddStop(.65f, 0.0f);
-	//clearcoatPF.AddStop(0.7f, 0.7f);
+	clearcoatPF.AddStop(.4f, 0.0f);
+	//clearcoatPF.AddStop(0.5f, 0.6f);
 	clearcoatPF.AddStop(1.0f, 0.0f);
-	glActiveTexture(GL_TEXTURE7);
 	clearcoatPF.EvaluateTexture(100);
 
 	// Get cubemap file locations
@@ -431,14 +437,12 @@ int main(int argc, char* argv[])
 	const GLubyte* renderer = glGetString(GL_RENDERER);
 	std::cout << renderer << "\n";
 
-	glActiveTexture(GL_TEXTURE1);
 	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(scanFolder);
 
 	const uint32_t numSamples = 8;
-	RaytracePass raytracePass(size, numSamples, dicom);
+	RaytracePass raytracePass(size, numSamples, dicom, colorTF, opacityTF.Unique().Get());
 	raytracePass.SetPhysicalSize(volumeScale);
 
-	glActiveTexture(GL_TEXTURE4);
 	Cubemap cubemap(cubemapFiles);
 
 	DrawQuad drawQuad = DrawQuad(size, numSamples);
@@ -464,7 +468,7 @@ int main(int argc, char* argv[])
 
 		const glm::mat4 view = viewController->GetView();
 		raytracePass.SetView(view);
-		raytracePass.Execute(opacityTF.Unique().Get());
+		raytracePass.Execute(colorTF, opacityTF.Unique().Get(), clearcoatPF.Unique().Get(), cubemap.Unique().Get(), dicom->GetTexture().Get());
 
 		drawQuad.Execute(raytracePass.GetColorTexture());
 		glfwPollEvents();

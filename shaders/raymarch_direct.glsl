@@ -1,15 +1,16 @@
 ﻿
 #version 430
-#extension GL_ARB_shader_group_vote : require
-#extension GL_ARB_shader_ballot : require
-#extension GL_NV_shader_thread_shuffle : require // for shuffleXorNV
+#extension GL_KHR_shader_subgroup_basic : require
+#extension GL_KHR_shader_subgroup_ballot : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_shuffle : require
 
 #pragma include("common.glsl")
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f, binding = 0) uniform image2D imgOutput;
 layout(binding = 3) uniform sampler3D sigmaVolume;
-layout(binding = 4) uniform samplerCube irrCubemap;
+layout(binding = 4) uniform samplerCube cubemap;
 layout(rgba16f, binding = 5) uniform image2D rayPosTex;
 layout(rgba16f, binding = 6) uniform image2D accumTex;
 layout(binding = 7) uniform sampler1D clearcoatLUT; // TODO: replace with cubic function?
@@ -41,50 +42,44 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, in float diffuse, out vec3 tra
 
     isect.x = rand() * stepSize;
 
-    // compute ray in index space
-    ro = (ro - lowerBound) * scaleFactor;
-    rd *= scaleFactor;
-
-    const uint startActive = uint(ballotARB(true));
-    const uint clearcoatThreads = uint(ballotARB(diffuse < .5f));
+    subgroupBarrier();
+    const uvec4 startActive = subgroupBallot(true);
+    const uvec4 clearcoatThreads = subgroupBallot(diffuse < .5f);
 
     float multiplier = diffuse * (coneSpread / voxelSize), stepMultiplier = 1.f;
     vec3 linearDensity = vec3(0.0f);
-    uint needsHelp = 1, finished = 0;
+    uvec4 needsHelp = uvec4(1, 0, 0, 0), finished = uvec4(0);
     bool imDone = false;
     while (finished != startActive)
     {
-        uint getsHelp = findLSB(needsHelp);
-        bool gettingHelp = (getsHelp == gl_SubGroupInvocationARB);
-        float numHelpers = float(bitCount(finished));
+        uint getsHelp = subgroupBallotFindLSB(needsHelp);
+        bool gettingHelp = (getsHelp == gl_SubgroupInvocationID);
+        float numHelpers = float(subgroupBallotBitCount(finished));
         if (imDone)
         {
-            isect = readInvocationARB(isect, getsHelp);
-            ro = readInvocationARB(ro, getsHelp);
-            rd = readInvocationARB(rd, getsHelp);
+            subgroupBarrier();
+            isect = subgroupShuffle(isect, getsHelp);
+            ro = subgroupShuffle(ro, getsHelp);
+            rd = subgroupShuffle(rd, getsHelp);
 
-            const float offset = float(bitCount(uint(finished & gl_SubGroupLeMaskARB)));
+            const float offset = float(subgroupBallotBitCount(finished & gl_SubgroupLeMask));
             ro += rd * offset * stepSize;
         }
 
-        vec3 ps = ro + isect.x * rd;
-        vec3 rel = ps;
+        vec3 uvw = ro + isect.x * rd;
         float l = multiplier * isect.x + stepSize * (diffuse > .5f ? 1.f : 10.f);
         float level = log2(l);
 
-        vec4 bakedVal = textureLod(sigmaVolume, rel, min(mipmapHardcap, level));
-        vec3 sigmaT = vec3(pow(bakedVal.a, 1.2f) * l) * (vec3(1.f) - bakedVal.rgb);
+        vec4 bakedVal = textureLod(sigmaVolume, uvw, min(mipmapHardcap, level));
+        vec3 sigmaT = vec3(pow(bakedVal.a, 1.5f) * l) * (vec3(1.f) - bakedVal.rgb);
         
         helperSigmaT = vec3(imDone ? sigmaT : vec3(0.f));
         if (!imDone)
         {
             if (gettingHelp)
             {
-                helperSigmaT = helperSigmaT + shuffleXorNV(helperSigmaT, 16, 32);
-                helperSigmaT = helperSigmaT + shuffleXorNV(helperSigmaT, 8, 32);
-                helperSigmaT = helperSigmaT + shuffleXorNV(helperSigmaT, 4, 32);
-                helperSigmaT = helperSigmaT + shuffleXorNV(helperSigmaT, 2, 32);
-                helperSigmaT = helperSigmaT + shuffleXorNV(helperSigmaT, 1, 32);
+                subgroupBarrier();
+                helperSigmaT = subgroupAdd(helperSigmaT);
                 linearDensity += helperSigmaT;
                 isect.x += numHelpers * l;
             }
@@ -99,7 +94,8 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, in float diffuse, out vec3 tra
             multiplier = 0.f;
         }
 
-        finished = uint(ballotARB(imDone));
+        subgroupBarrier();
+        finished = subgroupBallot(imDone);
         needsHelp = clearcoatThreads & ~finished;
     }
     transmittance = exp(vec3(-linearDensity * 10.f));
@@ -110,7 +106,6 @@ void main()
     // get index in global work group i.e x,y position
     ivec2 index = ivec2(gl_GlobalInvocationID.xy);
     ivec2 screenIndex = ivec2(index.x / numSamples, index.y);
-    uint sampleNum = index.x % numSamples;
 
     vec4 accumPk = imageLoad(accumTex, index);
     vec3 accum = accumPk.rgb;
@@ -129,14 +124,11 @@ void main()
         cos(rayPosPk.w)
     );
 
-    vec2 isect = rayBox(ro, rd, lowerBound, -1.0 * lowerBound);
+    vec2 isect = rayBox(ro, rd, vec3(0.f), vec3(1.f));
     isect.x = max(0, isect.x);
     isect.y = min(isect.y, farT);
 
     // init tracing from camera
-    ro += rd * isect.x;
-    isect.y -= isect.x;
-
     vec4 lastImgVal = imageLoad(imgOutput, index);
 
     vec3 transmittance;
@@ -146,7 +138,7 @@ void main()
     vec4 invItr = vec4(1.f / abs(lastImgVal.a));
 
     float cubemapLod = diffuse * 7.416f;
-    vec3 incoming = textureLod(irrCubemap, rd, cubemapLod).rgb * transmittance * accum;
+    vec3 incoming = textureLod(cubemap, rd, cubemapLod).rgb * transmittance * accum;
     vec4 newCol = lastImgVal * (1.f - invItr) + vec4(incoming, 1.f) * invItr;
 
     float add = lastImgVal.a < 0.f ? 1.f : 0.f;
