@@ -132,15 +132,17 @@ void main()
     vec4 lastImgVal = imageLoad(imgOutput, index);
 
     vec3 transmittance;
-    float diffuse = (-1.f * sign(lastImgVal.a) + 1.f) * .5f;
+    float diffuse = (-1.f * sign(lastImgVal.a) + 1.f) * .5f; // 1.f if it should use voxel cone tracing, 0.f for clearcoat
     trace(ro, rd, isect, diffuse, transmittance);
 
+    // 1 / sampleCount
     vec4 invItr = vec4(1.f / abs(lastImgVal.a));
 
     float cubemapLod = diffuse * 7.416f;
     vec3 incoming = textureLod(cubemap, rd, cubemapLod).rgb * transmittance * accum;
     vec4 newCol = lastImgVal * (1.f - invItr) + vec4(incoming, 1.f) * invItr;
 
+    // add 1 to the sample count if this is not clearcoat (since clearcoat is additive and it's should not count towards mixed samples)
     float add = lastImgVal.a < 0.f ? 1.f : 0.f;
     newCol.a = abs(lastImgVal.a) + add;
 
