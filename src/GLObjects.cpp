@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 Cubemap::Cubemap(const std::vector<std::string>& filenames)

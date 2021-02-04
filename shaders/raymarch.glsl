@@ -195,7 +195,7 @@ void main()
         float pdf = clearcoatPDF(d, dot(wo, wm));
 
         // TODO: lambertian sampled rays sometimes have invalid wm, aka dot(wo, wm) = 0
-        thpt = (any(isnan(f)) || any(isnan(pdf))) ? vec3(0.0) : pct / pdf;
+        thpt = (any(isnan(f)) || isnan(pdf)) ? vec3(0.0) : pct / pdf;
 
         f = lambertian(col);
         pdf = lambertianPDF(wiDotN);
