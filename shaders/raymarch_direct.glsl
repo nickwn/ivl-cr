@@ -32,7 +32,7 @@ vec2 rayBox(vec3 ro, vec3 rd, vec3 mn, vec3 mx) {
 const float farT = 5.0; // hehe
 const float stepSize = 0.001;
 const float lightingMult = 1.0;
-volatile vec3 helperSigmaT = vec3(0.f);
+vec3 helperSigmaT = vec3(0.f);
 
 void trace(in vec3 ro, in vec3 rd, in vec2 isect, in float diffuse, out vec3 transmittance)
 {
