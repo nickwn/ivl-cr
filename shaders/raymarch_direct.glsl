@@ -41,62 +41,21 @@ void trace(in vec3 ro, in vec3 rd, in vec2 isect, in float diffuse, out vec3 tra
     const float mipmapHardcap = 5.4f;
 
     isect.x = rand() * stepSize;
-
-    subgroupBarrier();
-    const uvec4 startActive = subgroupBallot(true);
-    const uvec4 clearcoatThreads = subgroupBallot(diffuse < .5f);
-
-    float multiplier = diffuse * (coneSpread / voxelSize), stepMultiplier = 1.f;
+    float multiplier = diffuse * (coneSpread / voxelSize);
+    float additive = (diffuse < .5f) ? 0.f : stepSize;
     vec3 linearDensity = vec3(0.0f);
-    uvec4 needsHelp = uvec4(1, 0, 0, 0), finished = uvec4(0);
-    bool imDone = false;
-    while (finished != startActive)
+    while (isect.x < isect.y)
     {
-        uint getsHelp = subgroupBallotFindLSB(needsHelp);
-        bool gettingHelp = (getsHelp == gl_SubgroupInvocationID);
-        float numHelpers = float(subgroupBallotBitCount(finished));
-        if (imDone)
-        {
-            subgroupBarrier();
-            isect = subgroupShuffle(isect, getsHelp);
-            ro = subgroupShuffle(ro, getsHelp);
-            rd = subgroupShuffle(rd, getsHelp);
-
-            const float offset = float(subgroupBallotBitCount(finished & gl_SubgroupLeMask));
-            ro += rd * offset * stepSize;
-        }
-
         vec3 uvw = ro + isect.x * rd;
+
         float l = multiplier * isect.x + stepSize * (diffuse > .5f ? 1.f : 10.f);
         float level = log2(l);
 
         vec4 bakedVal = textureLod(sigmaVolume, uvw, min(mipmapHardcap, level));
-        vec3 sigmaT = vec3(pow(bakedVal.a, 1.5f) * l) * (vec3(1.f) - bakedVal.rgb);
-        
-        helperSigmaT = vec3(imDone ? sigmaT : vec3(0.f));
-        if (!imDone)
-        {
-            if (gettingHelp)
-            {
-                subgroupBarrier();
-                helperSigmaT = subgroupAdd(helperSigmaT);
-                linearDensity += helperSigmaT;
-                isect.x += numHelpers * l;
-            }
+        vec3 sigmaT = vec3(pow(bakedVal.a, 1.5) * l) * (vec3(1.f) - bakedVal.rgb);
 
-            linearDensity += sigmaT;
-            isect.x += l * stepMultiplier;
-        }
-
-        if (!imDone && isect.x > isect.y)
-        {
-            imDone = true;
-            multiplier = 0.f;
-        }
-
-        subgroupBarrier();
-        finished = subgroupBallot(imDone);
-        needsHelp = clearcoatThreads & ~finished;
+        linearDensity += sigmaT;
+        isect.x += l * 2.f;
     }
     transmittance = exp(vec3(-linearDensity * 10.f));
 }
