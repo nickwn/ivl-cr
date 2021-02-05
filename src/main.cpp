@@ -312,7 +312,7 @@ int main(int argc, char* argv[])
 	{
 		scanFolder = scansDir + argv[1] + "/";
 
-		if (argc == 2)
+		if (argc == 3)
 		{
 			configFilename = configsDir + argv[2];
 		}
