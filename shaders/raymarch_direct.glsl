@@ -1,10 +1,5 @@
 
 #version 430
-#extension GL_KHR_shader_subgroup_basic : require
-#extension GL_KHR_shader_subgroup_ballot : require
-#extension GL_KHR_shader_subgroup_arithmetic : require
-#extension GL_KHR_shader_subgroup_shuffle : require
-
 #pragma include("common.glsl")
 
 layout(local_size_x = 16, local_size_y = 16) in;
