@@ -5,12 +5,12 @@
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f, binding = 0) uniform image2D imgOutput;
 layout(binding = 1) uniform sampler3D rawVolume;
-layout(binding = 2) uniform sampler1D transferLUT;
-layout(binding = 3) uniform sampler1D opacityLUT;
+layout(binding = 2) uniform sampler2D transferLUT;
+layout(binding = 3) uniform sampler2D opacityLUT;
 layout(binding = 4) uniform samplerCube cubemap;
 layout(rgba16f, binding = 5) uniform image2D rayPosTex;
 layout(rgba16f, binding = 6) uniform image2D accumTex;
-layout(binding = 7) uniform sampler1D clearcoatLUT; // TODO: replace with cubic function?
+layout(binding = 7) uniform sampler2D clearcoatLUT; // TODO: replace with cubic function?
 uniform uint numSamples;
 uniform vec3 scaleFactor;
 uniform vec3 scanSize;
@@ -82,7 +82,7 @@ void trace(in vec3 ro, in vec3 rd, out uint hit, out vec3 uvw)
         uvw = ro + isect.x * rd;
 
         float density = texture(rawVolume, uvw).r;
-        float opacity = texture(opacityLUT, density).r;
+        float opacity = texture(opacityLUT, vec2(density, 0.f)).r;
         float sigmaT = opacity;
 
         if (sigmaT > surfaceThresh)
@@ -139,7 +139,7 @@ void main()
     trace(ro, rd, hit, uvw);
 
     float density = texture(rawVolume, uvw).r;
-    float opacity = texture(opacityLUT, density).r;
+    float opacity = texture(opacityLUT, vec2(density, 0.f)).r;
 
     vec4 lastImgVal = imageLoad(imgOutput, index);
     if (hit == 0) // If the ray exited the volume before a hit
@@ -154,7 +154,7 @@ void main()
         return;
     }
 
-    vec3 col = texture(transferLUT, density).rgb;
+    vec3 col = texture(transferLUT, vec2(density, 0.f)).rgb;
 
     // Here we decide if this voxel should be shaded as a surface or volume. 
     // The difference between the two is that surfaces only bounce light rays with a distribution over a hemisphere, 
@@ -169,7 +169,7 @@ void main()
     // I use surfaceThresh to force surface shading at some high opacity value; it's also used earlier in trace() to force terminate a ray
     if (rand() < pbrdf || opacity > surfaceThresh)
     {
-        const float alpha = 0.9, pClearcoat = texture(clearcoatLUT, density).r;
+        const float alpha = 0.9, pClearcoat = texture(clearcoatLUT, vec2(density, 0.f)).r;
         vec3 n = normalize(grad), wm = vec3(0.f);
         if (rand() < .5f) // 50/50 chance of choosing either a clearcoat sample or diffuse sample
         {

@@ -61,7 +61,7 @@ void DrawQuad::Execute(const UniqueTexture& texture)
 	glBindImageTexture(
 		0, texture.Get(), 0, false, 0, GL_READ_WRITE, GL_RGBA16F);
 	glUniform1i(0, 0);
-	glUniform1ui(1, mNumSamples);
+	glUniform1ui(glGetUniformLocation(mProgram, "samples"), mNumSamples);
 	glBindVertexArray(mArray);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }

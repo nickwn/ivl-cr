@@ -5,38 +5,42 @@
 
 void PiecewiseFunction<float, glm::vec4, LinearInterp<float, glm::vec4>>::GenTexture(const std::vector<glm::vec4>& evals) const
 {
-	glBindTexture(GL_TEXTURE_1D, mUniqueTexture.Get());
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, evals.size(), 0, GL_RGBA, GL_FLOAT, evals.data());
+	glBindTexture(GL_TEXTURE_2D, mUniqueTexture.Get());
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, evals.size(), 1, 0, GL_RGBA, GL_FLOAT, evals.data());
 }
 
 void PiecewiseFunction<float, glm::vec4, ConstInterp<float, glm::vec4>>::GenTexture(const std::vector<glm::vec4>& evals) const
 {
-	glBindTexture(GL_TEXTURE_1D, mUniqueTexture.Get());
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, evals.size(), 0, GL_RGBA, GL_FLOAT, evals.data());
+	glBindTexture(GL_TEXTURE_2D, mUniqueTexture.Get());
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, evals.size(), 1, 0, GL_RGBA, GL_FLOAT, evals.data());
 }
 
 void PiecewiseFunction<float, float, ConstInterp<float, float>>::GenTexture(const std::vector<float>& evals) const
 {
-	glBindTexture(GL_TEXTURE_1D, mUniqueTexture.Get());
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); // would be better if sampled lower, but high sample cound should solve
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexImage1D(GL_TEXTURE_1D, 0, GL_R32F, evals.size(), 0, GL_RED, GL_FLOAT, evals.data());
+	glBindTexture(GL_TEXTURE_2D, mUniqueTexture.Get());
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); // would be better if sampled lower, but high sample cound should solve
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, evals.size(), 1, 0, GL_RED, GL_FLOAT, evals.data());
 }
 
 void PiecewiseFunction<float, float, LinearInterp<float, float>>::GenTexture(const std::vector<float>& evals) const
 {
-	glBindTexture(GL_TEXTURE_1D, mUniqueTexture.Get());
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexImage1D(GL_TEXTURE_1D, 0, GL_R32F, evals.size(), 0, GL_RED, GL_FLOAT, evals.data());
+	glBindTexture(GL_TEXTURE_2D, mUniqueTexture.Get());
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, evals.size(), 1, 0, GL_RED, GL_FLOAT, evals.data());
 }
 
 void HSVTransferFunction::EvaluateTexture(const uint32_t size) const
@@ -69,7 +73,7 @@ void HSVTransferFunction::EvaluateTexture(const uint32_t size) const
 	glBindTexture(GL_TEXTURE_1D, mUniqueColorTexture.Get());
 	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, colors.size(), 0, GL_RGBA, GL_FLOAT, colors.data());
 }
 
@@ -109,7 +113,7 @@ void OpacityTransferFunction::EvaluateTexture(const uint32_t size) const
 	glBindTexture(GL_TEXTURE_1D, mUniqueOpacityTexture.Get());
 	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexImage1D(GL_TEXTURE_1D, 0, GL_R32F, highestOpacities.size(), 0, GL_RED, GL_FLOAT, highestOpacities.data());
 }
 
@@ -150,7 +154,7 @@ void SimpleTransferFunction::EvaluateOpacityTexture(const uint32_t size) const
 	glBindTexture(GL_TEXTURE_1D, mUniqueOpacityTexture.Get());
 	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexImage1D(GL_TEXTURE_1D, 0, GL_R32F, highestOpacities.size(), 0, GL_RED, GL_FLOAT, highestOpacities.data());
 }
 
@@ -184,6 +188,6 @@ void SimpleTransferFunction::EvaluateColorTexture(const uint32_t size) const
 	glBindTexture(GL_TEXTURE_1D, mUniqueColorTexture.Get());
 	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, colors.size(), 0, GL_RGBA, GL_FLOAT, colors.data());
 }

@@ -8,7 +8,7 @@ layout(binding = 3) uniform sampler3D sigmaVolume;
 layout(binding = 4) uniform samplerCube cubemap;
 layout(rgba16f, binding = 5) uniform image2D rayPosTex;
 layout(rgba16f, binding = 6) uniform image2D accumTex;
-layout(binding = 7) uniform sampler1D clearcoatLUT; // TODO: replace with cubic function?
+layout(binding = 7) uniform sampler2D clearcoatLUT; // TODO: replace with cubic function?
 uniform uint numSamples;
 uniform vec3 scaleFactor;
 uniform vec3 lowerBound;
