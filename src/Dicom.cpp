@@ -12,7 +12,7 @@
 #include <dcmtk/dcmimgle/dcmimage.h>
 #include <dcmtk/dcmdata/dctk.h>
 
-Dicom::Dicom(std::string folder)
+Dicom::Dicom(std::string folder, glm::vec3 ppoint, glm::vec3 pnorm)
 {
 	if (!std::filesystem::exists(folder))
 	{
@@ -87,6 +87,24 @@ Dicom::Dicom(std::string folder)
 		slices[i].image->setMinMaxWindow();
 		const uint16_t* pixels = reinterpret_cast<const uint16_t*>(slices[i].image->getOutputData(16));
 		std::copy(pixels, pixels + w * h, std::begin(data) + w * h * i);
+	}
+
+	float tx, ty, tz;
+	float dot;
+
+	for (size_t i = 0; i < w; i++)
+	{
+		for (size_t j = 0; j < h; j++)
+		{
+			for (size_t k = 0; k < d; k++)
+			{
+				tx = (float)i / w - ppoint.x; ty = (float)j / h - ppoint.y; tz = (float)k / d - ppoint.z;
+				dot = tx * pnorm.x + ty * pnorm.y + tz * pnorm.z;
+				if (dot > 0) {
+					data[i + w * j + h * w * k] = 1;
+				}
+			}
+		}
 	}
 
 	glBindTexture(GL_TEXTURE_3D, mUniqueTexture.Get());

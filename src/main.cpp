@@ -150,10 +150,10 @@ public:
 			}
 			else if (action == GLFW_RELEASE)
 			{
-				mDragStartPos.reset();
-				mCurrDelta.reset();
 				mViewDirtied = false;
 				mLastCachedView = *mCurrDelta * mLastCachedView;
+				mDragStartPos.reset();
+				mCurrDelta.reset();
 			}
 		}
 		else if (button == GLFW_MOUSE_BUTTON_RIGHT)
@@ -342,6 +342,15 @@ int main(int argc, char* argv[])
 	YAML::Node cameraNode = config["camera"];
 	const glm::mat4 cameraMat = glm::lookAt(cameraNode["pos"].as<glm::vec3>(), cameraNode["center"].as<glm::vec3>(), cameraNode["up"].as<glm::vec3>() * 1.f);
 
+	// cutting plane
+	YAML::Node cplaneNode = config["cutting plane"];
+	glm::vec3 ppoint = glm::vec3(0.f, 0.f, 2.f), pnorm = glm::vec3(0.f, 0.f, 1.f);
+	if (cplaneNode)
+	{
+		ppoint = cplaneNode["ppoint"].as<glm::vec3>();
+		pnorm = cplaneNode["pnorm"].as<glm::vec3>();
+	}
+
 	const glm::mat4 initialView = volumeMat * cameraMat;
 	std::shared_ptr<ViewController> viewController = std::make_shared<ViewController>(initialView);
 	win->AddMouseListener(viewController);
@@ -437,7 +446,7 @@ int main(int argc, char* argv[])
 	const GLubyte* renderer = glGetString(GL_RENDERER);
 	std::cout << renderer << "\n";
 
-	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(scanFolder);
+	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(scanFolder, ppoint, pnorm);
 
 	const uint32_t numSamples = 8;
 	RaytracePass raytracePass(size, numSamples, dicom, colorTF, opacityTF.Unique().Get());
