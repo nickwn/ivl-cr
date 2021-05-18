@@ -65,3 +65,54 @@ vec2 rand2()
 {
     return vec2(rand(), rand());
 }
+
+float densityFromPackedVoxel(highp float packedf)
+{
+    uint packed1 = uint(packedf * 65536);
+    bool hasMask = (packed1 & 1) == 1;
+    uint density = hasMask ? (packed1 >> 8) << 8 : (packed1 >> 1) << 1;
+    highp float densityf = density / 65536.f;
+    return densityf;
+}
+
+vec4 colorFromPackedVoxel(highp float packedf, sampler2D transferLUT, sampler1D opacityLUT)
+{
+    const uint organCount = 7;
+    vec3 organColors[organCount] = vec3[](
+        vec3(0.992, 0.968, 0.843), // bladder
+        vec3(0, 0.278, 1),         // kidney
+        vec3(0.752, 0.635, 0.996), // colon
+        vec3(1, 0.874, 0.109),     // spleen
+        vec3(0.968, 0.780, 1),     // illeum
+        vec3(1, 0, 0),             // aorta
+        vec3(0, .8, 1)             // vein
+    );
+
+    highp uint packed1 = uint(packedf * 65535);
+    bool hasMask = (packed1 & 1) == 1;
+    highp uint density = hasMask ? (packed1 >> 8) << 8 : (packed1 >> 1) << 1;
+    highp float densityf = density / 65536;
+    float opacity = texture(opacityLUT, densityf).r;
+
+    vec3 color;
+    if (hasMask)
+    {
+        highp uint mask = (packed1 & 0x00FE) >> 1;
+        color = vec3(1.f);
+        for (uint i = 0; i < organCount; i++)
+        {
+            if ((mask & (0x1 << i)) != 0)
+            {
+                color *= organColors[i];
+            }
+        }
+
+        //opacity = min(1.f, opacity * 10.f); // artificially boost opacity if masked because they can be kind of hidden otherwise
+    }
+    else
+    {
+        color = texture(transferLUT, vec2(density, 0.f)).rgb;
+    }
+
+    return vec4(color, opacity);
+}

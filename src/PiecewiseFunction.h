@@ -113,8 +113,7 @@ class OpacityTransferFunction
 {
 public:
 	OpacityTransferFunction(const std::vector<std::array<float, 5>>& opacityTriangles) :
-		mOpacityTriangles(opacityTriangles),
-		mUniqueOpacityTexture()
+		mOpacityTriangles(opacityTriangles)
 	{}
 
 	void EvaluateTexture(const uint32_t size) const;

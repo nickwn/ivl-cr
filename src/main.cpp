@@ -305,7 +305,7 @@ int main(int argc, char* argv[])
 	static const std::string scansDir = "scans/";
 
 	// defaults
-	std::string configFilename = configsDir + "config3.yaml";
+	std::string configFilename = configsDir + "config4.yaml";
 	std::string scanFolder = scansDir + "Larry_2017/";
 
 	if (argc > 1)
@@ -344,11 +344,20 @@ int main(int argc, char* argv[])
 
 	// cutting plane
 	YAML::Node cplaneNode = config["cutting plane"];
-	glm::vec3 ppoint = glm::vec3(0.f, 0.f, 2.f), pnorm = glm::vec3(0.f, 0.f, 1.f);
+	std::optional<Dicom::CuttingPlane> cuttingPlane;
 	if (cplaneNode)
 	{
-		ppoint = cplaneNode["ppoint"].as<glm::vec3>();
-		pnorm = cplaneNode["pnorm"].as<glm::vec3>();
+		cuttingPlane = Dicom::CuttingPlane();
+		cuttingPlane->ppoint = cplaneNode["ppoint"].as<glm::vec3>();
+		cuttingPlane->pnorm = cplaneNode["pnorm"].as<glm::vec3>();
+	}
+
+	// masking controls
+	YAML::Node maskOpt = config["mask"];
+	Dicom::MaskMode maskMode = Dicom::MaskMode::None;
+	if (maskOpt)
+	{
+		maskMode = Dicom::ParseMaskMode(maskOpt.as<std::string>());
 	}
 
 	const glm::mat4 initialView = volumeMat * cameraMat;
@@ -366,16 +375,44 @@ int main(int argc, char* argv[])
 		opacityTriangles.push_back(triangle);
 	}
 
-	//OpacityTransferFunction opacityTF = OpacityTransferFunction(opacityTriangles);
-	PLF<float, float> opacityTF = PLF<float, float>();
+	glActiveTexture(GL_TEXTURE0);
+	OpacityTransferFunction opacityTF = OpacityTransferFunction(opacityTriangles);
+	/*PLF<float, float> opacityTF = PLF<float, float>();
 	opacityTF.AddStop(0.f, 0.f);
 	opacityTF.AddStop(0.3f, 0.f);
 	//opacityTF.AddStop(0.41f, 1.f);
 	opacityTF.AddStop(.5f, 1.f);
-	opacityTF.AddStop(1.f, 1.f);
+	opacityTF.AddStop(1.f, 1.f);*/
 
-	glActiveTexture(GL_TEXTURE0);
 	opacityTF.EvaluateTexture(100);
+	/*vec3[organCount](vec3(0.992, 0.968, 0.843), vec3(0, 0.278, 1), 
+					  vec3(0.752, 0.635, 0.996),  vec3(1, 0.874, 0.109),
+					vec3(0.968, 0.780, 1), vec3(1, 0, 0), vec3(0, .8, 1));
+
+	uint organMask = 0;
+	#ifdef BLADDER
+	organMask |= 1;
+	#endif
+	#ifdef KIDNEY
+	organMask |= 2;
+	#endif
+	#ifdef COLON
+	organMask |= 4;
+	#endif
+	#ifdef SPLEEN
+	organMask |= 8;
+	#endif
+	#ifdef ILLEUM
+	organMask |= 16;
+	#endif
+	#ifdef AORTA
+	organMask |= 32;
+	#endif
+	#ifdef VEIN
+	organMask |= 64;
+	#endif
+	//etc...
+*/
 
 	using ColorPLF = PLF<float, glm::vec4>;
 	GLuint colorTF = -1;
@@ -446,7 +483,7 @@ int main(int argc, char* argv[])
 	const GLubyte* renderer = glGetString(GL_RENDERER);
 	std::cout << renderer << "\n";
 
-	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(scanFolder, ppoint, pnorm);
+	std::shared_ptr<Dicom> dicom = std::make_shared<Dicom>(scanFolder, cuttingPlane, maskMode);
 
 	const uint32_t numSamples = 8;
 	RaytracePass raytracePass(size, numSamples, dicom, colorTF, opacityTF.Unique().Get());

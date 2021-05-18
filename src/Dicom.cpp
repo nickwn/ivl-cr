@@ -12,7 +12,9 @@
 #include <dcmtk/dcmimgle/dcmimage.h>
 #include <dcmtk/dcmdata/dctk.h>
 
-Dicom::Dicom(std::string folder, glm::vec3 ppoint, glm::vec3 pnorm)
+#include "stb_image.h"
+
+Dicom::Dicom(std::string folder, const std::optional<CuttingPlane>& cuttingPlane, MaskMode maskMode)
 {
 	if (!std::filesystem::exists(folder))
 	{
@@ -72,6 +74,52 @@ Dicom::Dicom(std::string folder, glm::vec3 ppoint, glm::vec3 pnorm)
 	const uint32_t h = slices[0].image->getHeight();
 	const uint32_t d = uint32_t(slices.size());
 
+	std::vector<std::uint8_t> mask = std::vector<std::uint8_t>(w * h * d);
+	std::string maskFolder = folder + "/mask";
+	try
+	{
+		for (const std::filesystem::directory_entry& entry : std::filesystem::directory_iterator(maskFolder))
+		{
+			int tmp_w, tmp_h, tmp_ch;
+			std::uint8_t* data = stbi_load(entry.path().string().c_str(), &tmp_w, &tmp_h, &tmp_ch, 0);
+			if (data)
+			{
+				if (tmp_w != w && tmp_h == h)
+				{
+					throw std::runtime_error("bad mask dimensions");
+				}
+
+				std::string layerStr = entry.path().stem().string();
+				int layer = std::stoi(layerStr);
+
+				std::size_t offset = layer * w * h;
+				std::uint8_t* insertBegin = std::next(&*std::begin(mask), offset);
+				if (tmp_ch == 1)
+				{
+					std::memcpy(insertBegin, data, w * h);
+				}
+				else
+				{
+					for (std::size_t i = 0; i < w * h; i++)
+					{
+						*std::next(insertBegin, i) = data[i * 3];
+					}
+				}
+
+				stbi_image_free(data);
+			}
+			else
+			{
+				std::cerr << "error loading mask " << entry.path().string() << "\n";
+			}
+		}
+	}
+	catch (std::exception e)
+	{
+		std::cerr << e.what();
+		throw std::runtime_error("filesystem error");
+	}
+
 	glm::vec2 b = glm::vec2(slices[0].location);
 	for (const auto& i : slices) 
 	{
@@ -89,20 +137,88 @@ Dicom::Dicom(std::string folder, glm::vec3 ppoint, glm::vec3 pnorm)
 		std::copy(pixels, pixels + w * h, std::begin(data) + w * h * i);
 	}
 
-	float tx, ty, tz;
-	float dot;
+	struct VoxelData
+	{
+		// | density (15)           | isMask (1) |
+		// | density (8) | mask (7) | isMask (1) |
+		std::uint16_t data;
 
-	for (size_t i = 0; i < w; i++)
+		void setIsMask(bool isMask)
+		{
+			data |= isMask & 0x0001;
+		}
+
+		void setMask(std::uint8_t mask)
+		{
+			data |= (mask << 1) & 0x00FE;
+		}
+
+		void setDensity_lowp(std::uint16_t density)
+		{
+			std::uint8_t compressed = density >> 8;
+			data |= (compressed << 8) & 0xFF00;
+		}
+
+		void setDensity_highp(std::uint16_t density)
+		{
+			std::uint16_t compressed = density >> 1;
+			std::uint32_t data32 = data;
+			std::uint32_t tmp = std::uint32_t(compressed << 8) | 0x0001;
+			std::uint32_t tmp2 = data32 & tmp;
+			std::uint16_t tmp3 = data32 & tmp;
+			data |= std::uint32_t(compressed << 1) & 0xFFFE;
+		}
+	};
+
+	for (size_t k = 0; k < d; k++)
 	{
 		for (size_t j = 0; j < h; j++)
 		{
-			for (size_t k = 0; k < d; k++)
+			for (size_t i = 0; i < w; i++)
 			{
-				tx = (float)i / w - ppoint.x; ty = (float)j / h - ppoint.y; tz = (float)k / d - ppoint.z;
-				dot = tx * pnorm.x + ty * pnorm.y + tz * pnorm.z;
-				if (dot > 0) {
-					data[i + w * j + h * w * k] = 1;
+				const std::size_t offset = i + w * j + h * w * k;
+				std::uint16_t density = data[offset];
+				if (cuttingPlane)
+				{
+					const glm::vec3& ppoint = cuttingPlane->ppoint;
+					const glm::vec3& pnorm = cuttingPlane->pnorm;
+					const float tx = (float)i / w - ppoint.x, ty = (float)j / h - ppoint.y, tz = (float)k / d - ppoint.z;
+					const float dot = tx * pnorm.x + ty * pnorm.y + tz * pnorm.z;
+					if (dot > 0)
+					{
+						density = 1;
+					}
 				}
+
+				VoxelData voxel{ 0 };
+				if (mask.size() && maskMode != MaskMode::None)
+				{
+					if (!mask[offset])
+					{
+						if (maskMode == MaskMode::Isolate)
+						{
+							density = 1;
+						}
+
+						voxel.setIsMask(false);
+						voxel.setDensity_highp(density);
+					}
+					else
+					{
+						std::uint8_t maskval = mask[offset];
+						voxel.setIsMask(true);
+						voxel.setMask(mask[offset]);
+						voxel.setDensity_lowp(density);
+					}
+				}
+				else
+				{
+					voxel.setMask(false);
+					voxel.setDensity_highp(density);
+				}
+
+
+				data[offset] = voxel.data;
 			}
 		}
 	}

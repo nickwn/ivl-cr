@@ -6,13 +6,13 @@
 
 RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::shared_ptr<Dicom> dicom, GLuint transferLUT, GLuint opacityLUT)
 	: mRaytraceProgram("shaders/raymarch.glsl", { "numSamples", "scaleFactor", "scanSize", "scanResolution", "lowerBound", "view", "itrs", "depth" }, 
-		{ {"rawVolume", {GL_TEXTURE1, GL_TEXTURE_3D}}, {"transferLUT", {GL_TEXTURE2, GL_TEXTURE_2D}}, {"opacityLUT", {GL_TEXTURE3, GL_TEXTURE_2D}}, {"cubemap", {GL_TEXTURE4, GL_TEXTURE_CUBE_MAP}}, {"clearcoatLUT", {GL_TEXTURE7, GL_TEXTURE_2D}} },
+		{ {"rawVolume", {GL_TEXTURE1, GL_TEXTURE_3D}}, {"transferLUT", {GL_TEXTURE2, GL_TEXTURE_2D}}, {"opacityLUT", {GL_TEXTURE3, GL_TEXTURE_1D}}, {"cubemap", {GL_TEXTURE4, GL_TEXTURE_CUBE_MAP}}, {"clearcoatLUT", {GL_TEXTURE7, GL_TEXTURE_2D}} },
 		{ {"imgOutput", {0, GL_READ_WRITE, GL_RGBA16F}}, {"rayPosTex", {5, GL_READ_WRITE, GL_RGBA16F}}, {"accumTex", {6, GL_READ_WRITE, GL_RGBA16F}} })
 	, mGenRaysProgram("shaders/gen_rays.glsl", { "numSamples", "view", "itrs" }, {},
 		{ {"imgOutput", {0, GL_READ_WRITE, GL_RGBA16F}}, {"rayPosTex", {5, GL_READ_WRITE, GL_RGBA16F}}, {"accumTex", {6, GL_READ_WRITE, GL_RGBA16F}} })
 	, mDenoiseProgram("shaders/denoise.glsl", {}) // TODO: add texture/image bindings
 	, mPrecomputeProgram("shaders/precompute.glsl", { "scanResolution" }, 
-		{ { "transferLUT", {GL_TEXTURE2, GL_TEXTURE_2D} }, { "opacityLUT", {GL_TEXTURE3, GL_TEXTURE_2D} } },
+		{ { "transferLUT", {GL_TEXTURE2, GL_TEXTURE_2D} }, { "opacityLUT", {GL_TEXTURE3, GL_TEXTURE_1D} } },
 		{ {"rawVolume", {1, GL_READ_ONLY, GL_R16}} , {"bakedVolume", {4, GL_WRITE_ONLY, GL_RGBA16}} })
 	, mConeTraceProgram("shaders/raymarch_direct.glsl", { "numSamples", "scaleFactor", "lowerBound", "itrs" }, 
 		{ {"sigmaVolume", {GL_TEXTURE3, GL_TEXTURE_3D}}, {"cubemap", {GL_TEXTURE4, GL_TEXTURE_CUBE_MAP}}, {"clearcoatLUT", {GL_TEXTURE7, GL_TEXTURE_2D}} },

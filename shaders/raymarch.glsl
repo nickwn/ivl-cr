@@ -6,7 +6,7 @@ layout(local_size_x = 16, local_size_y = 16) in;
 layout(rgba16f, binding = 0) uniform image2D imgOutput;
 layout(binding = 1) uniform sampler3D rawVolume;
 layout(binding = 2) uniform sampler2D transferLUT;
-layout(binding = 3) uniform sampler2D opacityLUT;
+layout(binding = 3) uniform sampler1D opacityLUT;
 layout(binding = 4) uniform samplerCube cubemap;
 layout(rgba16f, binding = 5) uniform image2D rayPosTex;
 layout(rgba16f, binding = 6) uniform image2D accumTex;
@@ -82,7 +82,7 @@ void trace(in vec3 ro, in vec3 rd, out uint hit, out vec3 uvw)
         uvw = ro + isect.x * rd;
 
         float density = texture(rawVolume, uvw).r;
-        float opacity = texture(opacityLUT, vec2(density, 0.f)).r;
+        float opacity = texture(opacityLUT, density).r;
         float sigmaT = opacity;
 
         if (sigmaT > surfaceThresh)
@@ -139,7 +139,7 @@ void main()
     trace(ro, rd, hit, uvw);
 
     float density = texture(rawVolume, uvw).r;
-    float opacity = texture(opacityLUT, vec2(density, 0.f)).r;
+    float opacity = texture(opacityLUT, density).r;
 
     vec4 lastImgVal = imageLoad(imgOutput, index);
     if (hit == 0) // If the ray exited the volume before a hit
@@ -226,6 +226,11 @@ void main()
     rayPosPk.xyz = uvw;
     rayPosPk.w = acos(wi.z);
     imageStore(rayPosTex, index, rayPosPk);
+
+    if (any(isnan(thpt)))
+    {
+        thpt = vec3(0.f);
+    }
 
     float phiOff = wi.x < 0.0 ? pi : 0.0;
     accumPk.rgb = accum * thpt;
