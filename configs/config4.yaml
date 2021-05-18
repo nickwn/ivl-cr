@@ -16,6 +16,6 @@ transfer function:
   - [1.0, 0.0, 1.0, 0.0, 1.0]
   gradient: [[0.8, 0.0, 0.0], [1.0, 0.8, 0.0]]
   color scheme: RGB-gradient
-mask: none
+mask: body
 cubemap: studio1
 itrs: 0

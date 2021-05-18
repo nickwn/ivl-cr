@@ -16,6 +16,7 @@
 
 Dicom::Dicom(std::string folder, const std::optional<CuttingPlane>& cuttingPlane, MaskMode maskMode)
 {
+	mMaskMode = maskMode;
 	if (!std::filesystem::exists(folder))
 	{
 		std::cerr << "folder " + folder + " not found";
@@ -190,7 +191,14 @@ Dicom::Dicom(std::string folder, const std::optional<CuttingPlane>& cuttingPlane
 					}
 				}
 
-				VoxelData voxel{ 0 };
+				if (mask.size() && maskMode == MaskMode::Isolate)
+				{
+					if (!mask[offset])
+					{
+						density = 1;
+					}
+				}
+				/*VoxelData voxel{ 0 };
 				if (mask.size() && maskMode != MaskMode::None)
 				{
 					if (!mask[offset])
@@ -215,10 +223,10 @@ Dicom::Dicom(std::string folder, const std::optional<CuttingPlane>& cuttingPlane
 				{
 					voxel.setMask(false);
 					voxel.setDensity_highp(density);
-				}
+				}*/
 
 
-				data[offset] = voxel.data;
+				data[offset] = density;
 			}
 		}
 	}
@@ -235,6 +243,14 @@ Dicom::Dicom(std::string folder, const std::optional<CuttingPlane>& cuttingPlane
 
 	glTexImage3D(GL_TEXTURE_3D, 0, GL_R16, w, h, d, 0, GL_RED, GL_UNSIGNED_SHORT, data.data());
 	//glBindImageTexture(1, mTexture, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R16);
+
+	glBindTexture(GL_TEXTURE_3D, mMaskTexture.Get());
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_R8, w, h, d, 0, GL_RED, GL_UNSIGNED_BYTE, mask.data());
 
 	mDim = glm::ivec3(w, h, d);
 }

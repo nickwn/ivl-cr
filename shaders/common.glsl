@@ -66,16 +66,18 @@ vec2 rand2()
     return vec2(rand(), rand());
 }
 
-float densityFromPackedVoxel(highp float packedf)
+float getVoxelOpacity(uint maskMode, sampler1D opacityLUT, uint mask, float density)
 {
-    uint packed1 = uint(packedf * 65536);
-    bool hasMask = (packed1 & 1) == 1;
-    uint density = hasMask ? (packed1 >> 8) << 8 : (packed1 >> 1) << 1;
-    highp float densityf = density / 65536.f;
-    return densityf;
+    if (maskMode == 2 && mask == 0)
+    {
+        return 0.f;
+    }
+
+    return texture(opacityLUT, density).r;
 }
 
-vec4 colorFromPackedVoxel(highp float packedf, sampler2D transferLUT, sampler1D opacityLUT)
+// maskMode - 0:none, 1:body, 2:isolate
+vec3 getVoxelColor(uint maskMode, sampler2D transferLUT, uint mask, float density)
 {
     const uint organCount = 7;
     vec3 organColors[organCount] = vec3[](
@@ -88,23 +90,23 @@ vec4 colorFromPackedVoxel(highp float packedf, sampler2D transferLUT, sampler1D 
         vec3(0, .8, 1)             // vein
     );
 
-    highp uint packed1 = uint(packedf * 65535);
-    bool hasMask = (packed1 & 1) == 1;
-    highp uint density = hasMask ? (packed1 >> 8) << 8 : (packed1 >> 1) << 1;
-    highp float densityf = density / 65536;
-    float opacity = texture(opacityLUT, densityf).r;
-
     vec3 color;
-    if (hasMask)
+    if (maskMode != 0)
     {
-        highp uint mask = (packed1 & 0x00FE) >> 1;
-        color = vec3(1.f);
-        for (uint i = 0; i < organCount; i++)
+        if (mask != 0)
         {
-            if ((mask & (0x1 << i)) != 0)
+            color = vec3(1.f);
+            for (uint i = 0; i < organCount; i++)
             {
-                color *= organColors[i];
+                if ((mask & (0x1 << i)) != 0)
+                {
+                    color *= organColors[i];
+                }
             }
+        }
+        else
+        {
+            color = texture(transferLUT, vec2(density, 0.f)).rgb;
         }
 
         //opacity = min(1.f, opacity * 10.f); // artificially boost opacity if masked because they can be kind of hidden otherwise
@@ -114,5 +116,5 @@ vec4 colorFromPackedVoxel(highp float packedf, sampler2D transferLUT, sampler1D 
         color = texture(transferLUT, vec2(density, 0.f)).rgb;
     }
 
-    return vec4(color, opacity);
+    return color;
 }

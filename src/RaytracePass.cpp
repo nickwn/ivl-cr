@@ -5,15 +5,15 @@
 #include <glm/gtx/component_wise.hpp>
 
 RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::shared_ptr<Dicom> dicom, GLuint transferLUT, GLuint opacityLUT)
-	: mRaytraceProgram("shaders/raymarch.glsl", { "numSamples", "scaleFactor", "scanSize", "scanResolution", "lowerBound", "view", "itrs", "depth" }, 
-		{ {"rawVolume", {GL_TEXTURE1, GL_TEXTURE_3D}}, {"transferLUT", {GL_TEXTURE2, GL_TEXTURE_2D}}, {"opacityLUT", {GL_TEXTURE3, GL_TEXTURE_1D}}, {"cubemap", {GL_TEXTURE4, GL_TEXTURE_CUBE_MAP}}, {"clearcoatLUT", {GL_TEXTURE7, GL_TEXTURE_2D}} },
-		{ {"imgOutput", {0, GL_READ_WRITE, GL_RGBA16F}}, {"rayPosTex", {5, GL_READ_WRITE, GL_RGBA16F}}, {"accumTex", {6, GL_READ_WRITE, GL_RGBA16F}} })
+	: mRaytraceProgram("shaders/raymarch.glsl", { "numSamples", "scaleFactor", "scanSize", "scanResolution", "lowerBound", "view", "itrs", "depth", "maskMode" }, 
+		{ {"rawVolume", {GL_TEXTURE1, GL_TEXTURE_3D}}, {"transferLUT", {GL_TEXTURE2, GL_TEXTURE_2D}}, {"opacityLUT", {GL_TEXTURE3, GL_TEXTURE_1D}}, {"cubemap", {GL_TEXTURE4, GL_TEXTURE_CUBE_MAP}} }, //, { "clearcoatLUT", {GL_TEXTURE7, GL_TEXTURE_2D} } },
+		{ {"imgOutput", {0, GL_READ_WRITE, GL_RGBA16F}}, {"rayPosTex", {5, GL_READ_WRITE, GL_RGBA16F}}, {"accumTex", {6, GL_READ_WRITE, GL_RGBA16F}}, {"maskVolume", {7, GL_READ_ONLY, GL_R8UI}} })
 	, mGenRaysProgram("shaders/gen_rays.glsl", { "numSamples", "view", "itrs" }, {},
 		{ {"imgOutput", {0, GL_READ_WRITE, GL_RGBA16F}}, {"rayPosTex", {5, GL_READ_WRITE, GL_RGBA16F}}, {"accumTex", {6, GL_READ_WRITE, GL_RGBA16F}} })
 	, mDenoiseProgram("shaders/denoise.glsl", {}) // TODO: add texture/image bindings
-	, mPrecomputeProgram("shaders/precompute.glsl", { "scanResolution" }, 
+	, mPrecomputeProgram("shaders/precompute.glsl", { "scanResolution", "maskMode" }, 
 		{ { "transferLUT", {GL_TEXTURE2, GL_TEXTURE_2D} }, { "opacityLUT", {GL_TEXTURE3, GL_TEXTURE_1D} } },
-		{ {"rawVolume", {1, GL_READ_ONLY, GL_R16}} , {"bakedVolume", {4, GL_WRITE_ONLY, GL_RGBA16}} })
+		{ {"rawVolume", {1, GL_READ_ONLY, GL_R16}} , {"bakedVolume", {4, GL_WRITE_ONLY, GL_RGBA16}}, {"maskVolume", {5, GL_READ_ONLY, GL_R8UI}} })
 	, mConeTraceProgram("shaders/raymarch_direct.glsl", { "numSamples", "scaleFactor", "lowerBound", "itrs" }, 
 		{ {"sigmaVolume", {GL_TEXTURE3, GL_TEXTURE_3D}}, {"cubemap", {GL_TEXTURE4, GL_TEXTURE_CUBE_MAP}}, {"clearcoatLUT", {GL_TEXTURE7, GL_TEXTURE_2D}} },
 		{ {"imgOutput", {0, GL_READ_WRITE, GL_RGBA16F}}, {"rayPosTex", {5, GL_READ_WRITE, GL_RGBA16F}}, {"accumTex", {6, GL_READ_WRITE, GL_RGBA16F}} })
@@ -78,7 +78,9 @@ RaytracePass::RaytracePass(const glm::ivec2& size, const uint32_t samples, std::
 	mPrecomputeProgram.BindTexture("opacityLUT", opacityLUT);
 	mPrecomputeProgram.BindImage("rawVolume", dicom->GetTexture().Get(), 0);
 	mPrecomputeProgram.BindImage("bakedVolume", mBakedVolumeTexture.Get(), 0);
+	mPrecomputeProgram.BindImage("maskVolume", dicom->GetMask().Get(), 0);
 	mPrecomputeProgram.UpdateUniform("scanResolution", dicom->GetScanSize());
+	mPrecomputeProgram.UpdateUniform("maskMode", GLuint(dicom->GetMaskMode()));
 	mPrecomputeProgram.Execute(bakeSize.x / 8, bakeSize.y / 8, bakeSize.z / 8);
 
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
@@ -113,10 +115,11 @@ void RaytracePass::Execute(GLuint transferLUT, GLuint opacityLUT, GLuint clearco
 	mRaytraceProgram.BindTexture("transferLUT", transferLUT);
 	mRaytraceProgram.BindTexture("opacityLUT", opacityLUT);
 	mRaytraceProgram.BindTexture("cubemap", cubemap);
-	mRaytraceProgram.BindTexture("clearcoatLUT", clearcoatLUT);
+	//mRaytraceProgram.BindTexture("clearcoatLUT", clearcoatLUT);
 	mRaytraceProgram.BindImage("imgOutput", mColorTexture.Get());
 	mRaytraceProgram.BindImage("rayPosTex", mPosTexture.Get());
 	mRaytraceProgram.BindImage("accumTex", mAccumTexture.Get());
+	mRaytraceProgram.BindImage("maskVolume", mDicom.lock()->GetMask().Get());
 	mRaytraceProgram.UpdateUniform("numSamples", GLuint(mNumSamples));
 	mRaytraceProgram.UpdateUniform("scaleFactor", mScaleFactor);
 	mRaytraceProgram.UpdateUniform("scanSize", scanSize);
@@ -125,6 +128,7 @@ void RaytracePass::Execute(GLuint transferLUT, GLuint opacityLUT, GLuint clearco
 	mRaytraceProgram.UpdateUniform("view", mView);
 	mRaytraceProgram.UpdateUniform("itrs", mItrs);
 	mRaytraceProgram.UpdateUniform("depth", GLuint(1));
+	mRaytraceProgram.UpdateUniform("maskMode", GLuint(mDicom.lock()->GetMaskMode()));
 	mRaytraceProgram.Execute((mSize.x * mNumSamples) / 16, mSize.y / 16, 1);
 	
 	// trace the direct lighting rays
